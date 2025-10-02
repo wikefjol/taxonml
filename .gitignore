@@ -7,11 +7,12 @@ data/
 *.csv
 *.tsv
 *.jsonl
+scripts/
+
 
 # Bin
 /bin/
 bin/
-*.py
 *.csv
 *.tsv
 *.jsonl
