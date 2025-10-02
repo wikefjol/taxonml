@@ -17,6 +17,10 @@ bin/
 *.jsonl
 *.md
 
+
+index_code.py
+code_structure.json
+deps.json
 # Scratch / temp
 tmp.py
 *.tmp
