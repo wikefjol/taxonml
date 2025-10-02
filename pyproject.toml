@@ -3,11 +3,16 @@ requires = ["setuptools>=61"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "taxonml"
+name = "taxml"
 version = "0.1.0"
 description = "Taxonomy classification models and training"
 requires-python = ">=3.11"
 # Do NOT put torch/transformers here; modules provide them.
+
+[project.scripts]
+taxml-pretrain = "taxml.cli.pretrain:main"
+taxml-finetune = "taxml.cli.finetune:main"
+taxml-setup-exp = "taxml.cli.setup_experiment:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

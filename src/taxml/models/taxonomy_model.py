@@ -6,10 +6,10 @@ from typing import Dict, List, Optional, Literal, Any
 import torch
 from torch import nn, Tensor
 
-from taxonml.encoders.bert import set_frozen, describe_encoder
-from taxonml.heads.mlm import MLMHead
-from taxonml.heads.classifiers import HierarchicalHead
-from taxonml.labels.space import LabelSpace
+from taxml.encoders.bert import set_frozen, describe_encoder
+from taxml.heads.mlm import MLMHead
+from taxml.heads.classifiers import HierarchicalHead
+from taxml.labels.space import LabelSpace
 
 logger = logging.getLogger(__name__)
 

@@ -52,18 +52,18 @@ except Exception as e:  # pragma: no cover
     raise RuntimeError("PyYAML is required: pip install pyyaml") from e
 
 # Project modules
-from taxonml.core.config import build_profile_paths
-from taxonml.preprocessing.vocab import Vocabulary, KmerVocabConstructor
-from taxonml.preprocessing import augmentation, tokenization, padding, truncation
-from taxonml.preprocessing.preprocessor import Preprocessor
-from taxonml.data.datasets import ClassifyDataset
-from taxonml.labels.space import LabelSpace
-from taxonml.labels.encoder import LabelEncoder
-from taxonml.encoders.bert import load_pretrained_backbone, derive_arch_id_from_cfg
-from taxonml.models.taxonomy_model import TaxonomyModel
-from taxonml.training.trainers import ClassificationTrainer
-from taxonml.training.schedulers import build_scheduler_unified
-from taxonml.data.samplers import SpeciesBalancedSampler
+from taxml.core.config import build_profile_paths
+from taxml.preprocessing.vocab import Vocabulary, KmerVocabConstructor
+from taxml.preprocessing import augmentation, tokenization, padding, truncation
+from taxml.preprocessing.preprocessor import Preprocessor
+from taxml.data.datasets import ClassifyDataset
+from taxml.labels.space import LabelSpace
+from taxml.labels.encoder import LabelEncoder
+from taxml.encoders.bert import load_pretrained_backbone, derive_arch_id_from_cfg
+from taxml.models.taxonomy_model import TaxonomyModel
+from taxml.training.trainers import ClassificationTrainer
+from taxml.training.schedulers import build_scheduler_unified
+from taxml.data.samplers import SpeciesBalancedSampler
 
 def setup_logging(console_level: int = logging.INFO) -> None:
     # Root config
@@ -334,7 +334,7 @@ def resolve_paths(cfg: Dict[str, Any]) -> Dict[str, str]:
 #################################################################
 ##### Chunk 2: CLI & level selection ############################
 #################################################################
-from taxonml.core.constants import CANON_LEVELS, IGNORE_INDEX
+from taxml.core.constants import CANON_LEVELS, IGNORE_INDEX
 
 def parse_levels(levels_arg: str) -> list[str]:
     """

@@ -39,7 +39,7 @@ from dotenv import load_dotenv
 from sklearn.model_selection import StratifiedKFold
 
 # Local lib
-from taxonml.labels.space import LabelSpace
+from taxml.labels.space import LabelSpace
 
 # ---------------------------
 # Helpers

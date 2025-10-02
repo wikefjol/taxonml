@@ -5,7 +5,7 @@ import json
 import pandas as pd
 from collections import defaultdict
 
-from taxonml.core.constants import CANON_LEVELS
+from taxml.core.constants import CANON_LEVELS
 
 @dataclass
 class LabelSpace:

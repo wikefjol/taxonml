@@ -24,8 +24,8 @@ from tqdm import tqdm
 from entmax import Entmax15Loss
 
 # Local project
-from taxonml.core.constants import IGNORE_INDEX
-from taxonml.metrics.rank import compute_rank_metrics
+from taxml.core.constants import IGNORE_INDEX
+from taxml.metrics.rank import compute_rank_metrics
 
 
 TensorByLevel = Dict[str, torch.Tensor]

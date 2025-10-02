@@ -1,6 +1,6 @@
 # preprocessor.py
 from typing import Protocol, List, Optional
-from taxonml.preprocessing.vocab import Vocabulary
+from taxml.preprocessing.vocab import Vocabulary
 
 # Precise protocols for each stage
 class AugmentStrategy(Protocol):

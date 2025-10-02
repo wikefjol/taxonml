@@ -3,12 +3,11 @@
 # ------------------------
 
 # Data
-data/
+./data/
 *.csv
 *.tsv
 *.jsonl
 scripts/
-
 
 # Bin
 /bin/

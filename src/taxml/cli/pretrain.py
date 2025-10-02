@@ -68,15 +68,15 @@ SAVE_EVERY_EPOCHS    = 1
 # ============================================================================
 
 # Project modules
-from taxonml.preprocessing.vocab import Vocabulary, KmerVocabConstructor
-from taxonml.preprocessing import augmentation, tokenization, padding, truncation
-from taxonml.preprocessing.preprocessor import Preprocessor
-from taxonml.data.datasets import MLMDataset
-from taxonml.encoders.bert import derive_arch_id_from_cfg
-from taxonml.models.taxonomy_model import TaxonomyModel
-from taxonml.training.trainers import MLMTrainer
-from taxonml.training.schedulers import build_scheduler_unified
-from taxonml.runners.finetune import build_profile_paths
+from taxml.preprocessing.vocab import Vocabulary, KmerVocabConstructor
+from taxml.preprocessing import augmentation, tokenization, padding, truncation
+from taxml.preprocessing.preprocessor import Preprocessor
+from taxml.data.datasets import MLMDataset
+from taxml.encoders.bert import derive_arch_id_from_cfg
+from taxml.models.taxonomy_model import TaxonomyModel
+from taxml.training.trainers import MLMTrainer
+from taxml.training.schedulers import build_scheduler_unified
+from taxml.runners.finetune import build_profile_paths
 
 # ---------- Utilities (same style as finetune.py) ----------------------------
 

@@ -5,7 +5,7 @@ from typing import Dict, List, Tuple
 
 import torch
 from torch import nn, Tensor
-from taxonml.labels.space import LabelSpace
+from taxml.labels.space import LabelSpace
 
 logger = logging.getLogger(__name__)
 
