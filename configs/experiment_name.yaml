@@ -1,0 +1,208 @@
+# =========================
+# Master Experiment Config
+# =========================
+
+experiment:
+  name: "sequence_fold_full"          # e.g., "sequence_fold_full", "sequence_fold_debug"
+  description: "Standard union (a+b+d), 10-fold sequence stratification."
+  union: "standard"                   # "standard" (a+b+d) | "conservative" (a+b+c)
+  profile: "debug"                    # "full" | "debug"
+  seed: 42
+
+data:
+  input_dir: "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/blast_filtered"
+  inputs:
+    standard: ["a_original_sh_sequences", "b_recruited_99pct_species", "d_recruited_97pct_sp"]
+    conservative: ["a_original_sh_sequences", "b_recruited_99pct_species", "c_recruited_99pct_sp"]
+  experiments_root: "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/experiments"
+  filenames:
+    prepared: "prepared_dataset.csv"
+    debug: "debug.csv"
+    label_space: "label_space.json"
+    prep_summary: "prep_summary.json"
+
+prep:
+  uppercase_sequences: true
+  min_species_resolution: 4
+  dedupe:
+    scope: "within_species"
+    keep_policy: "highest_resolution"
+  folds:
+    scheme: "sequence"      # "sequence" | "species_group"
+    k: 10
+    stratify_by: "species"
+    seed: 42
+  folds_species_group:
+    k: 10
+    stratify_by: "genus"
+    seed: 42
+  debug_subset:
+    enabled: true
+    n_genera: 5
+    min_species_per_genus: 2
+    target_size: 10000
+    seed: 42
+    balance:
+      by_level: "species"
+
+label_space:
+  levels: ["phylum", "class", "order", "family", "genus", "species"]
+  unknown_policy: "error"
+  mask_unused_labels: true
+
+tokenizer:
+  k: 3
+  max_length: 1500
+  alphabet: ["A","C","G","T"]
+  augmentation_probability: 0.01     # train only
+  stride: 3                          # if relevant to truncation
+
+preprocessing:
+  tokenization: {strategy: "kmer"}   # for future: "bpe", etc.
+  padding:     {strategy: "end", optimal_length_from_max: true}
+  truncation:  {strategy: "sliding_window", optimal_length_from_max: true}
+
+
+model:
+  encoder:
+    hidden_size: 512
+    num_hidden_layers: 10
+    num_attention_heads: 8
+    intermediate_size: 2048
+    hidden_dropout_prob: 0.1
+    attention_probs_dropout_prob: 0.1
+  heads:
+    hierarchical:
+      dropout: 0.1
+      bottleneck: 256
+    single_rank:
+      dropout: 0.1
+
+training:
+  defaults:
+    batch_size: 256
+    learning_rate: 0.0001
+    weight_decay: 0.01
+    max_epochs: 20
+    amp: true
+    device: "cuda"
+    num_workers: 4
+    log_every_n: 100
+    save_every_n_epochs: 1
+    gradient_accumulation_steps: 1
+    clip_grad_norm: null
+    metrics: ["accuracy"]
+
+  tasks:
+    pretrain:
+      max_epochs: 10
+      batch_size: 86
+      learning_rate: 0.005        # old pretrain peak_lr
+    finetune:
+      max_epochs: 40                # old fine_tuning epochs
+      batch_size: 284               # old fine_tuning batch size
+      learning_rate: 0.0001         # old finetune peak_lr
+
+  schedules:
+    pretrain:
+      kind: "tri4_epochs"           # tri4_epochs | cosine_epochs | cosine_restarts_epochs
+      min_lr_scale: 0.01            # final_lr = peak_lr / 100
+
+      # 4-phase (epoch-driven) – mirrors old pretrain config
+      warmup_epochs:   3
+      plateau_epochs:  50
+      decay_epochs:    500
+
+      # Cosine (no restarts)
+      cosine:
+        warmup_epochs: 3
+        cosine_epochs: 550          # plateau + decay
+
+      # Cosine with warm restarts
+      cosine_restarts:
+        warmup_epochs: 3
+        cycle_epochs: 550
+        peak_decay: 0.6             # <1.0 reduces peak each restart; 1.0 = pure cyclical
+        t_mult: 1.0
+        num_cycles: 3
+
+    finetune:
+      kind: "tri4_epochs"           # tri4_epochs | cosine_epochs | cosine_restarts_epochs
+      min_lr_scale: 0.01
+
+      # 4-phase (epoch-driven) – mirrors old finetune config
+      warmup_epochs:   1
+      plateau_epochs:  3
+      decay_epochs:    7
+
+      # Cosine (no restarts)
+      cosine:
+        warmup_epochs: 1
+        cosine_epochs: 10
+
+      # Cosine with warm restarts
+      cosine_restarts:
+        warmup_epochs: 1
+        cycle_epochs: 10
+        peak_decay: 0.8
+        t_mult: 1.0
+        num_cycles: 2
+
+artifacts:
+  roots:
+    experiments: "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/experiments"
+    pretrained:  "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/pretrained_models"
+
+  experiments:  # experiment-local (unchanged semantics)
+    prepared_dir:        "{experiments}/{experiment}/data"
+    prepared_csv:        "{experiments}/{experiment}/data/{prepared_filename}"
+    debug_csv:           "{experiments}/{experiment}/data/{debug_filename}"
+    label_space_json:    "{experiments}/{experiment}/data/{label_space_filename}"
+    prep_summary_json:   "{experiments}/{experiment}/data/{prep_summary_filename}"
+    logs_dir:            "{experiments}/{experiment}/logs"
+    prep_log:            "{experiments}/{experiment}/logs/prep.log"
+    folds_root:          "{experiments}/{experiment}/folds"
+    fold_dir:            "{experiments}/{experiment}/folds/fold_{fold:02d}"
+    run_dir:             "{experiments}/{experiment}/folds/fold_{fold:02d}/{task}"
+    checkpoints_dir:     "{experiments}/{experiment}/folds/fold_{fold:02d}/{task}/checkpoints"
+    history_file:        "{experiments}/{experiment}/folds/fold_{fold:02d}/{task}/history.json"
+    results_file:        "{experiments}/{experiment}/folds/fold_{fold:02d}/{task}/results.json"
+
+  pretrain:     # global pretraining runs (NEW)
+    # choose ONE of these two lines for namespacing; keep both if you want both styles:
+    # run_dir:          "{pretrained}/{run_name}"
+    run_dir:            "{pretrained}/{arch_id}/{run_name}"     # groups runs by encoder “architecture id”
+    checkpoints_dir:    "{run_dir}/checkpoints"
+    history_file:       "{run_dir}/history.json"
+    results_file:       "{run_dir}/results.json"
+    best_symlink:       "{pretrained}/{arch_id}/best.pt"        # maintained by training; used by finetune
+
+
+runtime:
+  fold_index: 1                         # 1..k
+  level: "species"                      # only used when task == finetune_single
+  profile_override: null                # "full" | "debug"
+
+# -------------------------
+# Cross-section profiles (deep-merge overrides)
+# -------------------------
+profiles:
+  full: {}                              # no overrides
+  debug:
+    tokenizer:
+      max_length: 600
+    model:
+      encoder:
+        hidden_size: 64
+        num_hidden_layers: 2
+        num_attention_heads: 2
+        intermediate_size: 256
+    training:
+      tasks:
+        pretrain:
+          max_epochs: 5
+          batch_size: 64
+          learning_rate: 1.8e-4
+        finetune:
+          batch_size: 64
+          max_epochs: 3

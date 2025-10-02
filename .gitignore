@@ -1,0 +1,120 @@
+# ------------------------
+# Project-specific ignores
+# ------------------------
+
+# Data
+data/
+*.csv
+*.tsv
+*.jsonl
+
+# Bin
+/bin/
+bin/
+*.py
+*.csv
+*.tsv
+*.jsonl
+*.md
+
+# Scratch / temp
+tmp.py
+*.tmp
+*.bak
+
+# Logs / checkpoints / model weights
+*.log
+*.ckpt
+*.pt
+*.pth
+
+# OS cruft
+.DS_Store
+
+# ------------------------
+# General Python ignores
+# ------------------------
+
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+venv/
+.venv/
+.env/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Distribution / packaging
+*.egg-info/
+.eggs/
+build/
+dist/
+downloads/
+sdist/
+wheels/
+share/python-wheels/
+*.egg
+MANIFEST
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+.coverage
+.coverage.*
+.cache
+.pytest_cache/
+.tox/
+.nox/
+nosetests.xml
+coverage.xml
+*.cover
+*.py.cover
+.hypothesis/
+htmlcov/
+
+# Jupyter
+.ipynb_checkpoints
+
+# Type checker caches
+.mypy_cache/
+.dmypy.json
+dmypy.json
+.pyre/
+.pytype/
+.ruff_cache/
+
+# C extensions
+*.so
+
+# Cython debug
+cython_debug/
+
+# ------------------------
+# Editor / IDE ignores
+# ------------------------
+
+# VSCode
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+!.vscode/*.code-snippets
+!*.code-workspace
+
+# PyCharm / JetBrains
+.idea/
+
+# Other editors
+*.swp
+*.swo
+.spyderproject
+.spyproject
+.ropeproject

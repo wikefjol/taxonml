@@ -1,0 +1,171 @@
+# =========================
+# Master Experiment Config
+# =========================
+
+experiment:
+  # Unique handle; changing this should duplicate the whole output tree under a new folder
+  name: "sequence_fold_full"        # e.g., "sequence_fold_full", "sequence_fold_debug"
+  description: "Standard union (a+b+d), 10-fold sequence stratification."
+  union: "standard"                 # "standard" (a+b+d) | "conservative" (a+b+c)
+  profile: "full"                   # "full" | "debug"  (controls overrides below)
+  seed: 42
+
+data:
+  # Input: BLAST-filtered CSVs produced by your immutable filter step
+  input_dir: "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/blast_filtered"   # from .env
+  inputs:
+    standard: ["a_original_sh_sequences", "b_recruited_99pct_species", "d_recruited_97pct_sp"]
+    conservative: ["a_original_sh_sequences", "b_recruited_99pct_species", "c_recruited_99pct_sp"]
+
+  # Output: where prep + training artifacts go for THIS experiment name
+  experiments_root: "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/experiments"   # from .env
+  # The prep script should write to: {experiments_root}/{experiment.name}/data/...
+  filenames:
+    prepared: "prepared_dataset.csv"       # full dataset after filtering/dedupe/folds
+    debug: "debug.csv"                     # optional small subset
+    label_space: "label_space.json"
+    prep_summary: "prep_summary.json"
+
+prep:
+  uppercase_sequences: true
+  min_species_resolution: 4               # keep rows with species_resolution > 4
+  dedupe:
+    scope: "within_species"               # only remove exact sequence duplicates within the same species
+    keep_policy: "highest_resolution"     # if duplicates exist, keep the highest species_resolution row
+  folds:
+    scheme: "sequence"                    # "sequence" | "species_group"
+    k: 10
+    stratify_by: "species"                # exp1 default
+    seed: 42
+  folds_species_group:
+    # Used if scheme == species_group (exp2). Kept here for completeness.
+    k: 10
+    stratify_by: "genus"
+    seed: 42
+  debug_subset:
+    enabled: true
+    n_genera: 5
+    min_species_per_genus: 2
+    target_size: 10000
+    seed: 42
+    balance:
+      by_level: "species"                 # balance primarily by species counts
+
+label_space:
+  levels: ["phylum", "class", "order", "family", "genus", "species"]
+  unknown_policy: "error"                 # "error" | "ignore"
+  mask_unused_labels: true                # keep global class set; mask labels not present in a given fold
+
+tokenizer:
+  type: "kmer"                            # "kmer"
+  k: 3
+  stride: 3
+  max_length: 1500
+  padding: "max_length"
+  truncation: true
+  alphabet: ["A","C","G","T"]
+  specials: ["[PAD]","[CLS]","[SEP]","[MASK]","[UNK]"]
+  vocab:
+    mode: "auto"                          # "auto" computes 4^k + len(specials); "explicit" uses explicit_size
+    explicit_size: null
+  masking_percentage: 0.15                # used by pretraining only
+
+model:
+  encoder:
+    type: "bert"
+    hidden_size: 512
+    num_hidden_layers: 10
+    num_attention_heads: 8
+    intermediate_size: 2048
+    hidden_dropout_prob: 0.1
+    attention_probs_dropout_prob: 0.1
+    max_position_embeddings: 502
+  heads:
+    hierarchical:
+      dropout: 0.1
+      bottleneck: 256
+    single_rank:
+      dropout: 0.1
+
+training:
+  # Global defaults applied to all tasks, then task/profile overrides below
+  defaults:
+    batch_size: 256
+    learning_rate: 0.0001
+    weight_decay: 0.01
+    warmup_steps: 350
+    max_epochs: 20
+    amp: true
+    device: "cuda"
+    num_workers: 4
+    log_every_n: 100
+    save_every_n_epochs: 1
+    gradient_accumulation_steps: 1
+    clip_grad_norm: null
+    metrics:
+      - "accuracy"
+  # Task-specific overrides
+  tasks:
+    pretrain:
+      max_epochs: 600
+      batch_size: 160
+      learning_rate: 0.00018
+      # vocab_size: computed from tokenizer if vocab.mode == auto
+    finetune_hierarchical:
+      max_epochs: 20
+      batch_size: 256
+    finetune_single:
+      max_epochs: 20
+      batch_size: 320
+  # Profile-specific overrides layered on top of task overrides
+  profiles:
+    full: {}
+    debug:
+      log_every_n: 25
+      max_epochs: 5
+      batch_size_scale: 0.5  # multiply batch_size by this for debug runs
+
+artifacts:
+  # Keep pretrained models OUTSIDE experiment trees
+  pretrained_models_dir: "${PRETRAINED_MODELS_DIR}"  # from .env, e.g., /.../pretrained_models
+  # Paths templates used by both prep and training
+  # These are *templates* the code should .format(...) with variables
+  paths:
+    # Prep outputs
+    prepared_dir: "{experiments_root}/{experiment_name}/data"
+    prepared_csv: "{experiments_root}/{experiment_name}/data/{prepared_filename}"
+    debug_csv: "{experiments_root}/{experiment_name}/data/{debug_filename}"
+    label_space_json: "{experiments_root}/{experiment_name}/data/{label_space_filename}"
+    prep_summary_json: "{experiments_root}/{experiment_name}/data/{prep_summary_filename}"
+
+    # Logs
+    logs_dir: "{experiments_root}/{experiment_name}/logs"
+    prep_log: "{experiments_root}/{experiment_name}/logs/prep.log"
+
+    # Fold-specific training dirs
+    folds_root: "{experiments_root}/{experiment_name}/folds"
+    fold_dir: "{experiments_root}/{experiment_name}/folds/fold_{fold:02d}"
+    run_dir: "{experiments_root}/{experiment_name}/folds/fold_{fold:02d}/{task}"      # task: pretrain|hierarchical|single_{level}
+    checkpoints_dir: "{experiments_root}/{experiment_name}/folds/fold_{fold:02d}/{task}/checkpoints"
+    history_file: "{experiments_root}/{experiment_name}/folds/fold_{fold:02d}/{task}/history.json"
+    results_file: "{experiments_root}/{experiment_name}/folds/fold_{fold:02d}/{task}/results.json"
+
+runtime:
+  # These are not fixed in YAML during batch execution—your CLI should pass them
+  # They exist here to document expected keys & defaults when not provided.
+  task: "pretrain"                        # "pretrain" | "finetune_hierarchical" | "finetune_single"
+  fold_index: 1                           # 1..k
+  level: "species"                        # only used when task == finetune_single
+  profile_override: null                  # "full" | "debug" (if provided, overrides experiment.profile)
+
+# -------------------------
+# YAML anchors (optional)
+# -------------------------
+# You can use anchors/aliases in real files to avoid repetition, e.g.:
+# encoder_defaults: &encoder_defaults
+#   hidden_size: 512
+#   ...
+# and then:
+# model:
+#   encoder:
+#     <<: *encoder_defaults

@@ -1,0 +1,914 @@
+{
+    "__main__": {
+        "bacon": 0,
+        "imports": [
+            "taxonml",
+            "taxonml.core",
+            "taxonml.core.config",
+            "taxonml.core.constants",
+            "taxonml.core.io",
+            "taxonml.core.types",
+            "taxonml.data",
+            "taxonml.data.collators",
+            "taxonml.data.datasets",
+            "taxonml.data.samplers",
+            "taxonml.encoders",
+            "taxonml.encoders.bert",
+            "taxonml.heads",
+            "taxonml.heads.classifiers",
+            "taxonml.heads.mlm",
+            "taxonml.models",
+            "taxonml.models.taxonomy_model",
+            "taxonml.preprocessing",
+            "taxonml.preprocessing.augmentation",
+            "taxonml.preprocessing.build",
+            "taxonml.preprocessing.padding",
+            "taxonml.preprocessing.preprocessor",
+            "taxonml.preprocessing.tokenization",
+            "taxonml.preprocessing.truncation",
+            "taxonml.preprocessing.vocab",
+            "taxonml.runners",
+            "taxonml.runners.finetune",
+            "taxonml.runners.finetune_old",
+            "taxonml.runners.migrate_old_model",
+            "taxonml.runners.pretrain",
+            "taxonml.runners.pretrain_v2",
+            "taxonml.runners.tmp_finetune_smoke",
+            "taxonml.runners.tmp_pretrain_smoke",
+            "taxonml.runners.verify_pipeline",
+            "taxonml.training",
+            "taxonml.training.schedulers",
+            "taxonml.training.trainers"
+        ],
+        "name": "__main__",
+        "path": null
+    },
+    "entmax": {
+        "bacon": 2,
+        "imported_by": [
+            "entmax",
+            "taxonml.training.trainers"
+        ],
+        "imports": [
+            "entmax"
+        ],
+        "name": "entmax",
+        "path": "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/environment/venv/lib/python3.11/site-packages/entmax/__init__.py"
+    },
+    "matplotlib": {
+        "bacon": 2,
+        "imported_by": [
+            "matplotlib",
+            "matplotlib.pyplot",
+            "matplotlib.ticker",
+            "taxonml.training.trainers"
+        ],
+        "imports": [
+            "matplotlib",
+            "matplotlib.pyplot",
+            "numpy"
+        ],
+        "name": "matplotlib",
+        "path": "/apps/Arch/software/matplotlib/3.7.2-gfbf-2023a/lib/python3.11/site-packages/matplotlib/__init__.py"
+    },
+    "matplotlib.pyplot": {
+        "bacon": 2,
+        "imported_by": [
+            "matplotlib",
+            "taxonml.training.trainers"
+        ],
+        "imports": [
+            "matplotlib",
+            "matplotlib.ticker",
+            "numpy"
+        ],
+        "name": "matplotlib.pyplot",
+        "path": "/apps/Arch/software/matplotlib/3.7.2-gfbf-2023a/lib/python3.11/site-packages/matplotlib/pyplot.py"
+    },
+    "matplotlib.ticker": {
+        "bacon": 2,
+        "imported_by": [
+            "matplotlib.pyplot",
+            "taxonml.training.trainers"
+        ],
+        "imports": [
+            "matplotlib",
+            "numpy"
+        ],
+        "name": "matplotlib.ticker",
+        "path": "/apps/Arch/software/matplotlib/3.7.2-gfbf-2023a/lib/python3.11/site-packages/matplotlib/ticker.py"
+    },
+    "numpy": {
+        "bacon": 2,
+        "imported_by": [
+            "matplotlib",
+            "matplotlib.pyplot",
+            "matplotlib.ticker",
+            "numpy",
+            "taxonml.data.datasets",
+            "taxonml.data.samplers",
+            "taxonml.training.trainers"
+        ],
+        "imports": [
+            "numpy"
+        ],
+        "name": "numpy",
+        "path": "/apps/Arch/software/SciPy-bundle/2023.07-gfbf-2023a/lib/python3.11/site-packages/numpy/__init__.py"
+    },
+    "pandas": {
+        "bacon": 2,
+        "imported_by": [
+            "pandas",
+            "taxonml.runners.finetune",
+            "taxonml.runners.finetune_old",
+            "taxonml.runners.pretrain",
+            "taxonml.runners.pretrain_v2",
+            "taxonml.training.trainers"
+        ],
+        "imports": [
+            "pandas"
+        ],
+        "name": "pandas",
+        "path": "/apps/Arch/software/SciPy-bundle/2023.07-gfbf-2023a/lib/python3.11/site-packages/pandas/__init__.py"
+    },
+    "taxonml": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.data.datasets",
+            "taxonml.heads.classifiers",
+            "taxonml.models.taxonomy_model",
+            "taxonml.preprocessing.build",
+            "taxonml.preprocessing.preprocessor",
+            "taxonml.runners.finetune",
+            "taxonml.runners.finetune_old",
+            "taxonml.runners.pretrain",
+            "taxonml.runners.pretrain_v2",
+            "taxonml.runners.tmp_finetune_smoke",
+            "taxonml.runners.tmp_pretrain_smoke",
+            "taxonml.training.trainers"
+        ],
+        "name": "taxonml",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/__init__.py"
+    },
+    "taxonml.core": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.data.datasets",
+            "taxonml.runners.finetune",
+            "taxonml.training.trainers"
+        ],
+        "name": "taxonml.core",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/core/__init__.py"
+    },
+    "taxonml.core.config": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__"
+        ],
+        "name": "taxonml.core.config",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/core/config.py"
+    },
+    "taxonml.core.constants": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.data.datasets",
+            "taxonml.runners.finetune",
+            "taxonml.training.trainers"
+        ],
+        "name": "taxonml.core.constants",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/core/constants.py"
+    },
+    "taxonml.core.io": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__"
+        ],
+        "name": "taxonml.core.io",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/core/io.py"
+    },
+    "taxonml.core.types": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__"
+        ],
+        "imports": [
+            "torch"
+        ],
+        "name": "taxonml.core.types",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/core/types.py"
+    },
+    "taxonml.data": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.runners.finetune",
+            "taxonml.runners.finetune_old",
+            "taxonml.runners.pretrain",
+            "taxonml.runners.pretrain_v2"
+        ],
+        "name": "taxonml.data",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/data/__init__.py"
+    },
+    "taxonml.data.collators": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__"
+        ],
+        "imports": [
+            "torch"
+        ],
+        "name": "taxonml.data.collators",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/data/collators.py"
+    },
+    "taxonml.data.datasets": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.runners.finetune",
+            "taxonml.runners.finetune_old",
+            "taxonml.runners.pretrain",
+            "taxonml.runners.pretrain_v2"
+        ],
+        "imports": [
+            "numpy",
+            "taxonml",
+            "taxonml.core",
+            "taxonml.core.constants",
+            "taxonml.preprocessing",
+            "taxonml.preprocessing.preprocessor",
+            "torch",
+            "torch.utils",
+            "torch.utils.data"
+        ],
+        "name": "taxonml.data.datasets",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/data/datasets.py"
+    },
+    "taxonml.data.samplers": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.runners.finetune"
+        ],
+        "imports": [
+            "numpy",
+            "torch",
+            "torch.utils",
+            "torch.utils.data"
+        ],
+        "name": "taxonml.data.samplers",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/data/samplers.py"
+    },
+    "taxonml.encoders": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.models.taxonomy_model",
+            "taxonml.runners.finetune",
+            "taxonml.runners.finetune_old",
+            "taxonml.runners.pretrain",
+            "taxonml.runners.pretrain_v2",
+            "taxonml.runners.tmp_finetune_smoke",
+            "taxonml.runners.tmp_pretrain_smoke"
+        ],
+        "name": "taxonml.encoders",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/encoders/__init__.py"
+    },
+    "taxonml.encoders.bert": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.models.taxonomy_model",
+            "taxonml.runners.finetune",
+            "taxonml.runners.finetune_old",
+            "taxonml.runners.pretrain",
+            "taxonml.runners.pretrain_v2",
+            "taxonml.runners.tmp_finetune_smoke",
+            "taxonml.runners.tmp_pretrain_smoke"
+        ],
+        "imports": [
+            "torch",
+            "torch.nn",
+            "transformers"
+        ],
+        "name": "taxonml.encoders.bert",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/encoders/bert.py"
+    },
+    "taxonml.heads": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.models.taxonomy_model"
+        ],
+        "name": "taxonml.heads",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/heads/__init__.py"
+    },
+    "taxonml.heads.classifiers": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.models.taxonomy_model"
+        ],
+        "imports": [
+            "taxonml",
+            "torch",
+            "torch.nn"
+        ],
+        "name": "taxonml.heads.classifiers",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/heads/classifiers.py"
+    },
+    "taxonml.heads.mlm": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.models.taxonomy_model"
+        ],
+        "imports": [
+            "torch",
+            "torch.nn"
+        ],
+        "name": "taxonml.heads.mlm",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/heads/mlm.py"
+    },
+    "taxonml.models": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.runners.finetune",
+            "taxonml.runners.finetune_old",
+            "taxonml.runners.pretrain",
+            "taxonml.runners.pretrain_v2",
+            "taxonml.runners.tmp_finetune_smoke",
+            "taxonml.runners.tmp_pretrain_smoke"
+        ],
+        "name": "taxonml.models",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/models/__init__.py"
+    },
+    "taxonml.models.taxonomy_model": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.runners.finetune",
+            "taxonml.runners.finetune_old",
+            "taxonml.runners.pretrain",
+            "taxonml.runners.pretrain_v2",
+            "taxonml.runners.tmp_finetune_smoke",
+            "taxonml.runners.tmp_pretrain_smoke"
+        ],
+        "imports": [
+            "taxonml",
+            "taxonml.encoders",
+            "taxonml.encoders.bert",
+            "taxonml.heads",
+            "taxonml.heads.classifiers",
+            "taxonml.heads.mlm",
+            "torch",
+            "torch.nn"
+        ],
+        "name": "taxonml.models.taxonomy_model",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/models/taxonomy_model.py"
+    },
+    "taxonml.preprocessing": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.data.datasets",
+            "taxonml.preprocessing.build",
+            "taxonml.preprocessing.preprocessor",
+            "taxonml.runners.finetune",
+            "taxonml.runners.finetune_old",
+            "taxonml.runners.pretrain",
+            "taxonml.runners.pretrain_v2"
+        ],
+        "name": "taxonml.preprocessing",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/preprocessing/__init__.py"
+    },
+    "taxonml.preprocessing.augmentation": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.preprocessing.build",
+            "taxonml.runners.finetune",
+            "taxonml.runners.pretrain_v2"
+        ],
+        "name": "taxonml.preprocessing.augmentation",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/preprocessing/augmentation.py"
+    },
+    "taxonml.preprocessing.build": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.runners.finetune_old",
+            "taxonml.runners.pretrain"
+        ],
+        "imports": [
+            "taxonml",
+            "taxonml.preprocessing",
+            "taxonml.preprocessing.augmentation",
+            "taxonml.preprocessing.padding",
+            "taxonml.preprocessing.preprocessor",
+            "taxonml.preprocessing.tokenization",
+            "taxonml.preprocessing.truncation",
+            "taxonml.preprocessing.vocab"
+        ],
+        "name": "taxonml.preprocessing.build",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/preprocessing/build.py"
+    },
+    "taxonml.preprocessing.padding": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.preprocessing.build",
+            "taxonml.runners.finetune",
+            "taxonml.runners.pretrain_v2"
+        ],
+        "name": "taxonml.preprocessing.padding",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/preprocessing/padding.py"
+    },
+    "taxonml.preprocessing.preprocessor": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.data.datasets",
+            "taxonml.preprocessing.build",
+            "taxonml.runners.finetune",
+            "taxonml.runners.pretrain_v2"
+        ],
+        "imports": [
+            "taxonml",
+            "taxonml.preprocessing",
+            "taxonml.preprocessing.vocab"
+        ],
+        "name": "taxonml.preprocessing.preprocessor",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/preprocessing/preprocessor.py"
+    },
+    "taxonml.preprocessing.tokenization": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.preprocessing.build",
+            "taxonml.runners.finetune",
+            "taxonml.runners.pretrain_v2"
+        ],
+        "name": "taxonml.preprocessing.tokenization",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/preprocessing/tokenization.py"
+    },
+    "taxonml.preprocessing.truncation": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.preprocessing.build",
+            "taxonml.runners.finetune",
+            "taxonml.runners.pretrain_v2"
+        ],
+        "name": "taxonml.preprocessing.truncation",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/preprocessing/truncation.py"
+    },
+    "taxonml.preprocessing.vocab": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.preprocessing.build",
+            "taxonml.preprocessing.preprocessor",
+            "taxonml.runners.finetune",
+            "taxonml.runners.pretrain_v2"
+        ],
+        "imports": [
+            "tqdm"
+        ],
+        "name": "taxonml.preprocessing.vocab",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/preprocessing/vocab.py"
+    },
+    "taxonml.runners": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.runners.pretrain_v2"
+        ],
+        "name": "taxonml.runners",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/runners/__init__.py"
+    },
+    "taxonml.runners.finetune": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.runners.pretrain_v2"
+        ],
+        "imports": [
+            "pandas",
+            "taxonml",
+            "taxonml.core",
+            "taxonml.core.constants",
+            "taxonml.data",
+            "taxonml.data.datasets",
+            "taxonml.data.samplers",
+            "taxonml.encoders",
+            "taxonml.encoders.bert",
+            "taxonml.models",
+            "taxonml.models.taxonomy_model",
+            "taxonml.preprocessing",
+            "taxonml.preprocessing.augmentation",
+            "taxonml.preprocessing.padding",
+            "taxonml.preprocessing.preprocessor",
+            "taxonml.preprocessing.tokenization",
+            "taxonml.preprocessing.truncation",
+            "taxonml.preprocessing.vocab",
+            "taxonml.training",
+            "taxonml.training.schedulers",
+            "taxonml.training.trainers",
+            "torch",
+            "torch.utils",
+            "torch.utils.data",
+            "transformers",
+            "yaml"
+        ],
+        "name": "taxonml.runners.finetune",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/runners/finetune.py"
+    },
+    "taxonml.runners.finetune_old": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__"
+        ],
+        "imports": [
+            "pandas",
+            "taxonml",
+            "taxonml.data",
+            "taxonml.data.datasets",
+            "taxonml.encoders",
+            "taxonml.encoders.bert",
+            "taxonml.models",
+            "taxonml.models.taxonomy_model",
+            "taxonml.preprocessing",
+            "taxonml.preprocessing.build",
+            "taxonml.training",
+            "taxonml.training.schedulers",
+            "taxonml.training.trainers",
+            "torch",
+            "torch.utils",
+            "torch.utils.data",
+            "yaml"
+        ],
+        "name": "taxonml.runners.finetune_old",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/runners/finetune_old.py"
+    },
+    "taxonml.runners.migrate_old_model": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__"
+        ],
+        "imports": [
+            "torch"
+        ],
+        "name": "taxonml.runners.migrate_old_model",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/runners/migrate_old_model.py"
+    },
+    "taxonml.runners.pretrain": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__"
+        ],
+        "imports": [
+            "pandas",
+            "taxonml",
+            "taxonml.data",
+            "taxonml.data.datasets",
+            "taxonml.encoders",
+            "taxonml.encoders.bert",
+            "taxonml.models",
+            "taxonml.models.taxonomy_model",
+            "taxonml.preprocessing",
+            "taxonml.preprocessing.build",
+            "taxonml.training",
+            "taxonml.training.schedulers",
+            "taxonml.training.trainers",
+            "torch",
+            "torch.utils",
+            "torch.utils.data",
+            "yaml"
+        ],
+        "name": "taxonml.runners.pretrain",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/runners/pretrain.py"
+    },
+    "taxonml.runners.pretrain_v2": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__"
+        ],
+        "imports": [
+            "pandas",
+            "taxonml",
+            "taxonml.data",
+            "taxonml.data.datasets",
+            "taxonml.encoders",
+            "taxonml.encoders.bert",
+            "taxonml.models",
+            "taxonml.models.taxonomy_model",
+            "taxonml.preprocessing",
+            "taxonml.preprocessing.augmentation",
+            "taxonml.preprocessing.padding",
+            "taxonml.preprocessing.preprocessor",
+            "taxonml.preprocessing.tokenization",
+            "taxonml.preprocessing.truncation",
+            "taxonml.preprocessing.vocab",
+            "taxonml.runners",
+            "taxonml.runners.finetune",
+            "taxonml.training",
+            "taxonml.training.schedulers",
+            "taxonml.training.trainers",
+            "torch",
+            "torch.utils",
+            "torch.utils.data",
+            "transformers"
+        ],
+        "name": "taxonml.runners.pretrain_v2",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/runners/pretrain_v2.py"
+    },
+    "taxonml.runners.tmp_finetune_smoke": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__"
+        ],
+        "imports": [
+            "taxonml",
+            "taxonml.encoders",
+            "taxonml.encoders.bert",
+            "taxonml.models",
+            "taxonml.models.taxonomy_model",
+            "torch",
+            "torch.nn",
+            "torch.nn.functional",
+            "yaml"
+        ],
+        "name": "taxonml.runners.tmp_finetune_smoke",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/runners/tmp_finetune_smoke.py"
+    },
+    "taxonml.runners.tmp_pretrain_smoke": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__"
+        ],
+        "imports": [
+            "taxonml",
+            "taxonml.encoders",
+            "taxonml.encoders.bert",
+            "taxonml.models",
+            "taxonml.models.taxonomy_model",
+            "torch",
+            "torch.nn",
+            "yaml"
+        ],
+        "name": "taxonml.runners.tmp_pretrain_smoke",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/runners/tmp_pretrain_smoke.py"
+    },
+    "taxonml.runners.verify_pipeline": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__"
+        ],
+        "imports": [
+            "torch",
+            "torch.nn",
+            "torch.nn.functional",
+            "torch.utils",
+            "torch.utils.data"
+        ],
+        "name": "taxonml.runners.verify_pipeline",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/runners/verify_pipeline.py"
+    },
+    "taxonml.training": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.runners.finetune",
+            "taxonml.runners.finetune_old",
+            "taxonml.runners.pretrain",
+            "taxonml.runners.pretrain_v2"
+        ],
+        "name": "taxonml.training",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/training/__init__.py"
+    },
+    "taxonml.training.schedulers": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.runners.finetune",
+            "taxonml.runners.finetune_old",
+            "taxonml.runners.pretrain",
+            "taxonml.runners.pretrain_v2"
+        ],
+        "imports": [
+            "torch"
+        ],
+        "name": "taxonml.training.schedulers",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/training/schedulers.py"
+    },
+    "taxonml.training.trainers": {
+        "bacon": 1,
+        "imported_by": [
+            "__main__",
+            "taxonml.runners.finetune",
+            "taxonml.runners.finetune_old",
+            "taxonml.runners.pretrain",
+            "taxonml.runners.pretrain_v2"
+        ],
+        "imports": [
+            "entmax",
+            "matplotlib",
+            "matplotlib.pyplot",
+            "matplotlib.ticker",
+            "numpy",
+            "pandas",
+            "taxonml",
+            "taxonml.core",
+            "taxonml.core.constants",
+            "torch",
+            "torch.cuda",
+            "torch.cuda.amp",
+            "torch.nn",
+            "torch.utils",
+            "torch.utils.data",
+            "tqdm"
+        ],
+        "name": "taxonml.training.trainers",
+        "path": "/cephyr/users/filbern/Alvis/workspace/clean_training/src/taxonml/training/trainers.py"
+    },
+    "torch": {
+        "bacon": 2,
+        "imported_by": [
+            "taxonml.core.types",
+            "taxonml.data.collators",
+            "taxonml.data.datasets",
+            "taxonml.data.samplers",
+            "taxonml.encoders.bert",
+            "taxonml.heads.classifiers",
+            "taxonml.heads.mlm",
+            "taxonml.models.taxonomy_model",
+            "taxonml.runners.finetune",
+            "taxonml.runners.finetune_old",
+            "taxonml.runners.migrate_old_model",
+            "taxonml.runners.pretrain",
+            "taxonml.runners.pretrain_v2",
+            "taxonml.runners.tmp_finetune_smoke",
+            "taxonml.runners.tmp_pretrain_smoke",
+            "taxonml.runners.verify_pipeline",
+            "taxonml.training.schedulers",
+            "taxonml.training.trainers",
+            "torch",
+            "torch.cuda",
+            "torch.nn",
+            "torch.nn.functional",
+            "torch.utils",
+            "torch.utils.data"
+        ],
+        "imports": [
+            "torch",
+            "torch.cuda",
+            "torch.nn",
+            "torch.utils",
+            "torch.utils.data"
+        ],
+        "name": "torch",
+        "path": "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/__init__.py"
+    },
+    "torch.cuda": {
+        "bacon": 2,
+        "imported_by": [
+            "taxonml.training.trainers",
+            "torch",
+            "torch.cuda"
+        ],
+        "imports": [
+            "torch",
+            "torch.cuda",
+            "torch.cuda.amp"
+        ],
+        "name": "torch.cuda",
+        "path": "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/cuda/__init__.py"
+    },
+    "torch.cuda.amp": {
+        "bacon": 2,
+        "imported_by": [
+            "taxonml.training.trainers",
+            "torch.cuda"
+        ],
+        "name": "torch.cuda.amp",
+        "path": "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/cuda/amp/__init__.py"
+    },
+    "torch.nn": {
+        "bacon": 2,
+        "imported_by": [
+            "taxonml.encoders.bert",
+            "taxonml.heads.classifiers",
+            "taxonml.heads.mlm",
+            "taxonml.models.taxonomy_model",
+            "taxonml.runners.tmp_finetune_smoke",
+            "taxonml.runners.tmp_pretrain_smoke",
+            "taxonml.runners.verify_pipeline",
+            "taxonml.training.trainers",
+            "torch",
+            "torch.nn",
+            "torch.nn.functional"
+        ],
+        "imports": [
+            "torch",
+            "torch.nn",
+            "torch.nn.functional"
+        ],
+        "name": "torch.nn",
+        "path": "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/__init__.py"
+    },
+    "torch.nn.functional": {
+        "bacon": 2,
+        "imported_by": [
+            "taxonml.runners.tmp_finetune_smoke",
+            "taxonml.runners.verify_pipeline",
+            "torch.nn"
+        ],
+        "imports": [
+            "torch",
+            "torch.nn"
+        ],
+        "name": "torch.nn.functional",
+        "path": "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/nn/functional.py"
+    },
+    "torch.utils": {
+        "bacon": 2,
+        "imported_by": [
+            "taxonml.data.datasets",
+            "taxonml.data.samplers",
+            "taxonml.runners.finetune",
+            "taxonml.runners.finetune_old",
+            "taxonml.runners.pretrain",
+            "taxonml.runners.pretrain_v2",
+            "taxonml.runners.verify_pipeline",
+            "taxonml.training.trainers",
+            "torch",
+            "torch.utils.data"
+        ],
+        "imports": [
+            "torch"
+        ],
+        "name": "torch.utils",
+        "path": "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/utils/__init__.py"
+    },
+    "torch.utils.data": {
+        "bacon": 2,
+        "imported_by": [
+            "taxonml.data.datasets",
+            "taxonml.data.samplers",
+            "taxonml.runners.finetune",
+            "taxonml.runners.finetune_old",
+            "taxonml.runners.pretrain",
+            "taxonml.runners.pretrain_v2",
+            "taxonml.runners.verify_pipeline",
+            "taxonml.training.trainers",
+            "torch",
+            "torch.utils.data"
+        ],
+        "imports": [
+            "torch",
+            "torch.utils",
+            "torch.utils.data"
+        ],
+        "name": "torch.utils.data",
+        "path": "/apps/Arch/software/PyTorch/2.1.2-foss-2023a-CUDA-12.1.1/lib/python3.11/site-packages/torch/utils/data/__init__.py"
+    },
+    "tqdm": {
+        "bacon": 2,
+        "imported_by": [
+            "taxonml.preprocessing.vocab",
+            "taxonml.training.trainers"
+        ],
+        "name": "tqdm",
+        "path": "/apps/Arch/software/tqdm/4.66.1-GCCcore-12.3.0/lib/python3.11/site-packages/tqdm/__init__.py"
+    },
+    "transformers": {
+        "bacon": 2,
+        "imported_by": [
+            "taxonml.encoders.bert",
+            "taxonml.runners.finetune",
+            "taxonml.runners.pretrain_v2",
+            "transformers"
+        ],
+        "imports": [
+            "transformers"
+        ],
+        "name": "transformers",
+        "path": "/apps/Arch/software/Transformers/4.39.3-gfbf-2023a/lib/python3.11/site-packages/transformers/__init__.py"
+    },
+    "yaml": {
+        "bacon": 2,
+        "imported_by": [
+            "taxonml.runners.finetune",
+            "taxonml.runners.finetune_old",
+            "taxonml.runners.pretrain",
+            "taxonml.runners.tmp_finetune_smoke",
+            "taxonml.runners.tmp_pretrain_smoke"
+        ],
+        "name": "yaml",
+        "path": "/apps/Arch/software/PyYAML/6.0-GCCcore-12.3.0/lib/python3.11/site-packages/yaml/__init__.py"
+    }
+}
