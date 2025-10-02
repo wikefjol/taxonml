@@ -34,6 +34,38 @@ import torch
 from torch.utils.data import DataLoader
 from transformers import BertConfig, BertModel
 
+# ==== USER SETTINGS (edit these to your environment) =========================
+EXPERIMENTS_ROOT = "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/experiments"
+PRETRAINED_ROOT  = "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/pretrained_models"
+EXPERIMENT_NAME  = "sequence_fold_full"
+# PROFILE          = "full"   # "full" | "debug"
+FOLD             = 7        # used to carve train/val as in prior code (fold_exp1)
+
+# Tokenizer / sequence params (from your old config)
+# K                    = 3
+# MAX_BASES            = 1500
+ALPHABET             = ["A", "C", "G", "T"]
+MLM_MASKING_PCT      = 0.15
+
+# Encoder (from your old config)
+# HIDDEN_SIZE          = 512
+# NUM_LAYERS           = 10
+# NUM_HEADS            = 8
+# INTERMEDIATE_SIZE    = 2048
+DROPOUT_HIDDEN       = 0.10
+DROPOUT_ATTENTION    = 0.10
+
+# Training defaults (from your old config; pretrain task overrides)
+BATCH_SIZE           = 160
+LEARNING_RATE        = 1.8e-4
+WEIGHT_DECAY         = 0.01
+MAX_EPOCHS           = 600
+AMP                  = True
+NUM_WORKERS          = 4
+PIN_MEMORY           = True
+LOG_EVERY            = 100
+SAVE_EVERY_EPOCHS    = 1
+# ============================================================================
 
 # Project modules
 from taxml.preprocessing.vocab import Vocabulary, KmerVocabConstructor
@@ -45,40 +77,6 @@ from taxml.models.taxonomy_model import TaxonomyModel
 from taxml.training.trainers import MLMTrainer
 from taxml.training.schedulers import build_scheduler_unified
 from taxml.runners.finetune import build_profile_paths
-
-# # ==== USER SETTINGS (edit these to your environment) =========================
-# EXPERIMENTS_ROOT = "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/experiments"
-# PRETRAINED_ROOT  = "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/pretrained_models"
-# EXPERIMENT_NAME  = "sequence_fold_full"
-# # PROFILE          = "full"   # "full" | "debug"
-# FOLD             = 7        # used to carve train/val as in prior code (fold_exp1)
-
-# # Tokenizer / sequence params (from your old config)
-# # K                    = 3
-# # MAX_BASES            = 1500
-# ALPHABET             = ["A", "C", "G", "T"]
-# MLM_MASKING_PCT      = 0.15
-
-# # Encoder (from your old config)
-# # HIDDEN_SIZE          = 512
-# # NUM_LAYERS           = 10
-# # NUM_HEADS            = 8
-# # INTERMEDIATE_SIZE    = 2048
-# DROPOUT_HIDDEN       = 0.10
-# DROPOUT_ATTENTION    = 0.10
-
-# # Training defaults (from your old config; pretrain task overrides)
-# BATCH_SIZE           = 160
-# LEARNING_RATE        = 1.8e-4
-# WEIGHT_DECAY         = 0.01
-# MAX_EPOCHS           = 600
-# AMP                  = True
-# NUM_WORKERS          = 4
-# PIN_MEMORY           = True
-# LOG_EVERY            = 100
-# SAVE_EVERY_EPOCHS    = 1
-# # ============================================================================
-
 
 # ---------- Utilities (same style as finetune.py) ----------------------------
 
