@@ -12,7 +12,7 @@ requires-python = ">=3.11"
 [project.scripts]
 taxml-pretrain = "taxml.cli.pretrain:main"
 taxml-finetune = "taxml.cli.finetune:main"
-taxml-setup-exp = "taxml.cli.setup_experiment:main"
+taxml-setup-exp = "taxml.cli.exp_setup:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

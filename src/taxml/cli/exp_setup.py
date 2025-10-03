@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+from __future__ import annotations
 
+import logging
+logger = logging.getLogger(__name__)
 """
 01_experiment_prep.py
 
@@ -23,11 +26,10 @@ Usage:
   python scripts/01_experiment_prep.py --config configs/experiment_name.yaml
 """
 
-from __future__ import annotations
+
 
 import argparse
 import json
-import logging
 import os
 from pathlib import Path
 from typing import Dict, List, Tuple, Iterable, Optional
@@ -40,7 +42,7 @@ from sklearn.model_selection import StratifiedKFold
 
 # Local lib
 from taxml.labels.space import LabelSpace
-
+from taxml.core.logging import setup_logging, attach_file_logger
 # ---------------------------
 # Helpers
 # ---------------------------
@@ -49,14 +51,14 @@ REQUIRED_COLS = [
     "sequence", "kingdom", "phylum", "class", "order", "family", "genus", "species", "species_resolution"
 ]
 
-def setup_logging(log_path: Path) -> None:
-    log_path.parent.mkdir(parents=True, exist_ok=True)
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s | %(levelname)s | %(message)s",
-        handlers=[logging.FileHandler(log_path), logging.StreamHandler()],
-    )
-    logging.info("Logging initialized.")
+# def setup_logging(log_path: Path) -> None:
+#     
+#     logging.basicConfig( # set basic config
+#         level=logging.INFO,
+#         format="%(asctime)s | %(levelname)s | %(message)s",
+#         handlers=[logging.FileHandler(log_path), logging.StreamHandler()],
+#     )
+#     logger.info("Logging initialized.") # pr
 
 def load_yaml(path: Path) -> Dict:
     with open(path, "r") as f:
@@ -79,16 +81,16 @@ def read_union_csvs(input_dir: Path, union_members: List[str]) -> pd.DataFrame:
         df = pd.read_csv(csv_path)
         require_columns(df, REQUIRED_COLS, context=str(csv_path))
         dfs.append(df)
-        logging.info(f"Loaded {len(df):,} rows from {csv_path.name}")
+        logger.info(f"Loaded {len(df):,} rows from {csv_path.name}")
     union_df = pd.concat(dfs, ignore_index=True)
-    logging.info(f"Union total rows: {len(union_df):,}")
+    logger.info(f"Union total rows: {len(union_df):,}")
     return union_df
 
 def apply_uppercase(df: pd.DataFrame) -> pd.DataFrame:
     if "sequence" in df.columns:
         n_nan = df["sequence"].isna().sum()
         if n_nan:
-            logging.warning(f"{n_nan:,} rows have NaN sequence; dropping them.")
+            logger.warning(f"{n_nan:,} rows have NaN sequence; dropping them.")
             df = df.dropna(subset=["sequence"])
         df["sequence"] = df["sequence"].astype(str).str.upper()
     return df
@@ -107,7 +109,7 @@ class NpEncoder(json.JSONEncoder):
 def filter_by_resolution(df: pd.DataFrame, min_resolution: int) -> pd.DataFrame:
     before = len(df)
     df = df[df["species_resolution"] > min_resolution].copy()
-    logging.info(f"Filtered by species_resolution > {min_resolution}: {before:,} -> {len(df):,}")
+    logger.info(f"Filtered by species_resolution > {min_resolution}: {before:,} -> {len(df):,}")
     return df
 
 def dedupe_within_species_by_sequence(df: pd.DataFrame, keep_policy: str = "highest_resolution") -> pd.DataFrame:
@@ -125,7 +127,7 @@ def dedupe_within_species_by_sequence(df: pd.DataFrame, keep_policy: str = "high
     else:
         raise ValueError(f"Unknown keep_policy: {keep_policy}")
     after = len(df)
-    logging.info(f"Dedup within species by sequence: removed {before - after:,} duplicates ({before:,} -> {after:,})")
+    logger.info(f"Dedup within species by sequence: removed {before - after:,} duplicates ({before:,} -> {after:,})")
     return df
 
 def assign_folds_sequence_stratified(df: pd.DataFrame, k: int, stratify_by: str, seed: int) -> pd.DataFrame:
@@ -138,7 +140,7 @@ def assign_folds_sequence_stratified(df: pd.DataFrame, k: int, stratify_by: str,
         fold_col[val_idx] = i
     df = df.copy()
     df["fold_exp1"] = fold_col
-    logging.info("Fold_exp1 counts:\n" + df["fold_exp1"].value_counts().sort_index().to_string())
+    logger.info("Fold_exp1 counts:\n" + df["fold_exp1"].value_counts().sort_index().to_string())
     return df
 
 def assign_folds_species_group(df: pd.DataFrame, k: int, stratify_by: str, seed: int) -> pd.DataFrame:
@@ -153,7 +155,7 @@ def assign_folds_species_group(df: pd.DataFrame, k: int, stratify_by: str, seed:
 
     # If stratification support is weak, fall back to random species split.
     if len(unique_species) < k or pd.Series(genera).value_counts().min() < k:
-        logging.warning("Insufficient stratification support; falling back to random split over species.")
+        logger.warning("Insufficient stratification support; falling back to random split over species.")
         rng = np.random.default_rng(seed)
         rng.shuffle(unique_species)
         chunks = np.array_split(unique_species, k)
@@ -169,7 +171,7 @@ def assign_folds_species_group(df: pd.DataFrame, k: int, stratify_by: str, seed:
 
     df = df.copy()
     df["fold_exp2"] = df["species"].map(sp2fold).astype(int)
-    logging.info("Fold_exp2 counts:\n" + df["fold_exp2"].value_counts().sort_index().to_string())
+    logger.info("Fold_exp2 counts:\n" + df["fold_exp2"].value_counts().sort_index().to_string())
     return df
 
 def make_debug_subset(
@@ -185,7 +187,7 @@ def make_debug_subset(
     gstats = df.groupby("genus").agg(n_species=("species", "nunique"), n_rows=("species", "size"))
     eligible = gstats[gstats["n_species"] >= min_species_per_genus]
     if eligible.empty:
-        logging.warning("No eligible genera for debug subset; skipping.")
+        logger.warning("No eligible genera for debug subset; skipping.")
         return pd.DataFrame(columns=df.columns)
 
     chosen = (
@@ -221,11 +223,11 @@ def make_debug_subset(
             parts.append(pd.concat(picked_idx, ignore_index=False))
 
     if not parts:
-        logging.warning("Could not assemble debug subset; skipping.")
+        logger.warning("Could not assemble debug subset; skipping.")
         return pd.DataFrame(columns=df.columns)
 
     debug_df = pd.concat(parts, ignore_index=False).reset_index(drop=True)
-    logging.info(
+    logger.info(
         f"Debug subset assembled: {len(debug_df):,} rows; "
         f"{debug_df['species'].nunique()} species across {len(chosen)} genera"
     )
@@ -329,19 +331,19 @@ def process_profile(
         if col in df.columns:
             df = df.drop(columns=[col])
 
-    logging.info("")
-    logging.info("=" * 70)
-    logging.info(f"=== PROFILE: {profile_name} ===")
-    logging.info("=" * 70)
-    logging.info(f"{profile_name}: rows={len(df):,} | unique species={df['species'].nunique():,} | "
+    logger.info("")
+    logger.info("=" * 70)
+    logger.info(f"=== PROFILE: {profile_name} ===")
+    logger.info("=" * 70)
+    logger.info(f"{profile_name}: rows={len(df):,} | unique species={df['species'].nunique():,} | "
                  f"unique genera={df['genus'].nunique():,} | unique families={df['family'].nunique():,}")
 
     # Assign folds (profile-specific)
-    logging.info(f"{profile_name}: assigning folds (exp1: sequence-stratified by {folds_cfg.get('stratify_by','species')})")
+    logger.info(f"{profile_name}: assigning folds (exp1: sequence-stratified by {folds_cfg.get('stratify_by','species')})")
     df = assign_folds_sequence_stratified(
         df, k=folds_cfg["k"], stratify_by=folds_cfg.get("stratify_by", "species"), seed=folds_cfg["seed"]
     )
-    logging.info(f"{profile_name}: assigning folds (exp2: species-group, stratify by {folds2_cfg.get('stratify_by','genus')})")
+    logger.info(f"{profile_name}: assigning folds (exp2: species-group, stratify by {folds2_cfg.get('stratify_by','genus')})")
     df = assign_folds_species_group(
         df, k=folds2_cfg["k"], stratify_by=folds2_cfg.get("stratify_by", "genus"), seed=folds2_cfg["seed"]
     )
@@ -349,25 +351,25 @@ def process_profile(
     # Persist prepared dataset for this profile
     prepared_csv = pdir / "prepared.csv"
     df.to_csv(prepared_csv, index=False)
-    logging.info(f"{profile_name}: wrote prepared dataset → {prepared_csv} ({len(df):,} rows)")
+    logger.info(f"{profile_name}: wrote prepared dataset → {prepared_csv} ({len(df):,} rows)")
 
     # Label space
     ls = LabelSpace.from_csv(str(prepared_csv), levels=levels)
     label_space_path = pdir / "label_space.json"
     ls.to_json(str(label_space_path))
-    logging.info(f"{profile_name}: wrote LabelSpace → {label_space_path}")
-    logging.info(f"{profile_name}: head spec: {ls.spec()}")
+    logger.info(f"{profile_name}: wrote LabelSpace → {label_space_path}")
+    logger.info(f"{profile_name}: head spec: {ls.spec()}")
 
     # Fold masks (exp1 / exp2)
     masks_exp1 = build_fold_masks(df, ls, fold_col="fold_exp1")
     fold_masks_exp1_path = pdir / "fold_masks_exp1.json"
     write_json(fold_masks_exp1_path, masks_exp1)
-    logging.info(f"{profile_name}: wrote fold masks (exp1) → {fold_masks_exp1_path}")
+    logger.info(f"{profile_name}: wrote fold masks (exp1) → {fold_masks_exp1_path}")
 
     masks_exp2 = build_fold_masks(df, ls, fold_col="fold_exp2")
     fold_masks_exp2_path = pdir / "fold_masks_exp2.json"
     write_json(fold_masks_exp2_path, masks_exp2)
-    logging.info(f"{profile_name}: wrote fold masks (exp2) → {fold_masks_exp2_path}")
+    logger.info(f"{profile_name}: wrote fold masks (exp2) → {fold_masks_exp2_path}")
 
     # Small profile summary
     summary = {
@@ -391,7 +393,7 @@ def process_profile(
     }
     profile_summary_path = pdir / "summary.json"
     write_json(profile_summary_path, summary)
-    logging.info(f"{profile_name}: wrote profile summary → {profile_summary_path}")
+    logger.info(f"{profile_name}: wrote profile summary → {profile_summary_path}")
 
     return summary
 
@@ -400,6 +402,9 @@ def process_profile(
 # ---------------------------
 
 def main() -> None:
+    setup_logging(console_level=logging.INFO, buffer_early=True)
+    logger.info("=== Prep startup ===")
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True, help="Path to master experiment YAML")
     args = parser.parse_args()
@@ -447,14 +452,19 @@ def main() -> None:
 
     base_data_dir.mkdir(parents=True, exist_ok=True)
     logs_dir.mkdir(parents=True, exist_ok=True)
-    setup_logging(log_path)
+    log_path.parent.mkdir(parents=True, exist_ok=True) # set a parent path 
+    attach_file_logger(
+        log_path,
+        file_level=logging.DEBUG,
+        flush_buffer=True,   # <-- moves everything logged so far into the file
+    )
 
     # Echo config useful for prep
-    logging.info(f"Experiment: {exp_name}")
-    logging.info(f"Union: {cfg['experiment']['union']}")
-    logging.info(f"Profile (requested): {cfg['experiment'].get('profile', 'full')}")
-    logging.info(f"Input dir: {input_dir}")
-    logging.info(f"Base data dir: {base_data_dir}")
+    logger.info(f"Experiment: {exp_name}")
+    logger.info(f"Union: {cfg['experiment']['union']}")
+    logger.info(f"Profile (requested): {cfg['experiment'].get('profile', 'full')}")
+    logger.info(f"Input dir: {input_dir}")
+    logger.info(f"Base data dir: {base_data_dir}")
 
     # Build union
     union_key = cfg["experiment"]["union"]
@@ -493,7 +503,7 @@ def main() -> None:
             seed=debug_cfg["seed"],
         )
         if len(df_debug) == 0:
-            logging.warning("Debug subset was requested but empty; skipping debug profile.")
+            logger.warning("Debug subset was requested but empty; skipping debug profile.")
             debug_enabled = False
 
     # --- Process profiles symmetrically ---
@@ -540,8 +550,8 @@ def main() -> None:
         "log_path": str(log_path),
     }
     write_json(top_summary_path, top_summary)
-    logging.info(f"Wrote top-level prep summary → {top_summary_path}")
-    logging.info("✓ Experiment prep complete.")
+    logger.info(f"Wrote top-level prep summary → {top_summary_path}")
+    logger.info("✓ Experiment prep complete.")
 
 if __name__ == "__main__":
     main()
