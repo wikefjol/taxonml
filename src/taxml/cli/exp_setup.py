@@ -5,28 +5,9 @@ from __future__ import annotations
 import logging
 logger = logging.getLogger(__name__)
 """
-01_experiment_prep.py
-
-Reads a master experiment config (YAML), ingests BLAST-filtered union CSVs,
-cleans and deduplicates data, and, **for each profile** (full, debug):
-
-- assigns folds (exp1: sequence stratified; exp2: species-group)
-- writes profile-scoped artifacts:
-    data/<profile>/prepared.csv
-    data/<profile>/label_space.json
-    data/<profile>/fold_masks_exp1.json
-    data/<profile>/fold_masks_exp2.json
-    data/<profile>/summary.json
-
-Also writes a top-level prep_summary.json with pointers to both profiles.
-
-Logs to experiments/<name>/logs/prep.log
-
-Usage:
-  python scripts/01_experiment_prep.py --config configs/experiment_name.yaml
+exp_setup.py
+... to be written later
 """
-
-
 
 import argparse
 import json

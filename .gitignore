@@ -15,13 +15,12 @@ bin/
 *.csv
 *.tsv
 *.jsonl
-*.md
-
+epic_issue_note.md
 # Refactor helpers
 open_helper_refactor_issuse.sh
 index_code.py
 code_structure.json
-deps.json
+*/deps.json
 target_structure.txt
 # Scratch / temp
 tmp.py
