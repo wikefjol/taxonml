@@ -1,11 +1,12 @@
 # Standard library
+import logging
+logger = logging.getLogger(__name__)
+
 import math
 import os
 import time
 import shutil
 import json
-from contextlib import nullcontext
-from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Set, Tuple, Sequence, NamedTuple
 from collections.abc import Mapping
 
@@ -26,7 +27,6 @@ from entmax import Entmax15Loss
 # Local project
 from taxml.core.constants import IGNORE_INDEX
 from taxml.metrics.rank import compute_rank_metrics
-
 
 TensorByLevel = Dict[str, torch.Tensor]
 MaskCache = Dict[str, Tuple[torch.Tensor, torch.Tensor]]
@@ -486,9 +486,6 @@ class ClassificationTrainer:
         out_png = os.path.join(self.ckpt, "batch_metrics_overview.png")
         fig.savefig(out_png, dpi=150)
         plt.close(fig)
-        print(f"[plot] wrote {out_png} (rows={n_rows}, points={len(df_s)})")
-
-
 
     def _plot_epoch_overview(self) -> None:
         if not self.metrics_path or not os.path.exists(self.metrics_path):
@@ -794,7 +791,6 @@ class ClassificationTrainer:
 
         Args:
             batch: A minibatch dict containing "input_ids" and "attention_mask".
-            use_amp: Whether to use autocast mixed precision.
 
         Returns:
             logits_by_level: Dict[level → Tensor[B, C_full]] with full-class logits.
@@ -1089,21 +1085,25 @@ class ClassificationTrainer:
             if self.ckpt:
                 ep_path = os.path.join(self.ckpt, f"epoch_{epoch:03d}.pt")
                 extra = {
-                    "epoch": epoch,
-                    "train": train_pkg["epoch"],   # dict: loss, metrics_by_level, mean_by_metric, num_batches
+                    "train": train_pkg["epoch"], 
                     "val":   val_pkg["epoch"],
                     "select_metric": {
                         "level": sel_level,
                         "name": sel_metric_name,
                         "value": sel_value,
                     },
-                    **(self.static_metadata or {}),  # optional metadata bundle
+                    **(self.static_metadata or {}),
                 }
                 _save_checkpoint(
-                    ep_path, self.model, self.optimizer, self.scheduler, epoch, extra,
-                    scaler=self.scaler, global_step=self.global_step, best_val=self.best_metric
-                )
-
+                    path = ep_path,
+                    model =  self.model,
+                    optimizer = self.optimizer,
+                    scheduler = self.scheduler,
+                    epoch = epoch,
+                    extra = extra,
+                    global_step = self.global_step,
+                    scaler=self.scaler, 
+                    )
                 # append epoch logs (two lines: train + val)
                 self._append_jsonl(self.metrics_path, [
                     {"type": "epoch", "phase": "train", "epoch": epoch, **train_pkg["epoch"],
@@ -1121,7 +1121,7 @@ class ClassificationTrainer:
                     self._plot_epoch_overview()
                 except Exception as e:
                     # plotting must never crash training
-                    print(f"[warn] plotting failed: {e}")
+                    logger.info(f"[warn] plotting failed: {e}")
 
                 # update best.json (no best.pt / last.pt)
                 if sel_value > self.best_metric:
@@ -1170,7 +1170,6 @@ class MLMTrainer:
                 amp: bool = True,
                 log_every: int = 100,
                 checkpoints_dir: Optional[str] = None,
-                save_every_n_epochs: int = 1,
                 ):
         self.model = model
         self.train_loader= train_loader
@@ -1183,7 +1182,6 @@ class MLMTrainer:
         self.log_every = int(log_every)
 
         self.ckpt = checkpoints_dir
-        self.save_every_n_epochs = max(1, int(save_every_n_epochs))
         if self.ckpt:
             os.makedirs(self.ckpt, exist_ok=True)
             self.metrics_path = os.path.join(self.ckpt, "metrics.jsonl")
@@ -1209,28 +1207,32 @@ class MLMTrainer:
         return logits, loss
 
     def resume(self, last_path: str) -> int:
-        """
-        Restore state from last_path if it exists. Returns start_epoch (int).
-        """
         if self.ckpt and os.path.exists(last_path):
-            start_epoch, self.global_step, self.best = _load_checkpoint(
-                last_path, self.model, self.optimizer, self.scheduler, self.scaler if self.amp else None
+            saved_epoch_1b, self.global_step, self.best = _load_checkpoint(
+                path=last_path,
+                model=self.model,
+                optimizer=self.optimizer,
+                scheduler=self.scheduler,
+                scaler=self.scaler if self.amp else None,
             )
-            return start_epoch
-        return 0
+            # start from the next epoch (1-based)
+            return saved_epoch_1b + 1
+        return 1
 
-    def fit(self, max_epochs: int, keep_all_epochs: bool = False, resume: bool = False):
-        start_epoch = 0
+    def train(self, max_epochs: int, resume: bool = False):
+        start_epoch = 1
+        
         if resume and self.ckpt:
             start_epoch = self.resume(os.path.join(self.ckpt, "last.pt"))
 
-        for epoch in range(start_epoch, max_epochs):
+        for epoch in range(start_epoch, max_epochs + 1):
             # ---- train
             self.model.train()
-            train_loss_sum, train_items = 0.0, 0
+            train_loss_sum = 0.0
+            train_items = 0
             t0 = time.time()
 
-            pbar = tqdm(self.train_loader, desc=f"Epoch {epoch+1}/{max_epochs} [tra]", leave=True)
+            pbar = tqdm(self.train_loader, desc=f"Epoch {epoch}/{max_epochs} [tra]", leave=True)
             for i, b in enumerate(pbar, 1):
                 b = self._move(b)
                 self.optimizer.zero_grad(set_to_none=True)
@@ -1275,53 +1277,83 @@ class MLMTrainer:
 
             # ---- validation
             self.model.eval()
-            v_loss_sum, v_items, v_acc_sum = 0.0, 0, 0.0
+            val_loss_sum, val_items, val_acc_sum = 0.0, 0, 0.0
             with torch.no_grad():
-                pbar_val = tqdm(self.val_loader, desc=f"Epoch {epoch+1}/{max_epochs} [val]", leave=True)
+                pbar_val = tqdm(self.val_loader, desc=f"Epoch {epoch}/{max_epochs} [val]", leave=True)
                 for b in pbar_val:
                     b = self._move(b)
                     logits, loss = self._step_loss(b)
-                    v_loss_sum += float(loss.item()) * b["input_ids"].size(0)
-                    v_items += b["input_ids"].size(0)
-                    v_acc_sum += token_accuracy(logits, b["labels"], IGNORE_INDEX)
+                    val_loss_sum += float(loss.item()) * b["input_ids"].size(0)
+                    val_items += b["input_ids"].size(0)
+                    val_acc_sum += token_accuracy(logits, b["labels"], IGNORE_INDEX)
 
-                    v_loss = v_loss_sum / max(1, v_items)
-                    v_acc  = v_acc_sum / max(1, len(self.val_loader)) if len(self.val_loader) > 0 else 0.0
-                    v_ppl  = math.exp(min(20.0, v_loss))
+                    val_loss = val_loss_sum / max(1, val_items)
+                    val_acc  = val_acc_sum / max(1, len(self.val_loader)) if len(self.val_loader) > 0 else 0.0
+                    val_ppl  = math.exp(min(20.0, val_loss))
 
                     pbar_val.set_postfix({
-                        "val_acc":  f"{v_acc:6.3f}",
-                        "val_loss": f"{v_loss:6.4f}",
-                        "ppl":  f"{v_ppl:8.2f}",
+                        "val_acc":  f"{val_acc:6.3f}",
+                        "val_loss": f"{val_loss:6.4f}",
+                        "ppl":  f"{val_ppl:8.2f}",
                     })
-
+            
+            # ---- epoch summary to logger ----
+            train_loss  = train_loss_sum / max(1, train_items) 
+            val_loss    = val_loss_sum   / max(1, val_items)
+            val_acc     = val_acc_sum    / max(1, len(self.val_loader)) if len(self.val_loader) > 0 else 0.0
+            val_ppl     = math.exp(min(20.0, val_loss))
+            
             # ---- checkpoints
             if self.ckpt:
-                ep_path = os.path.join(self.ckpt, f"epoch_{epoch:03d}.pt")
-                _save_checkpoint(ep_path, self.model, self.optimizer, self.scheduler, epoch,
-                                 {"val_loss": v_loss, "val_token_acc": v_acc, "val_ppl": v_ppl},
-                                 scaler=(self.scaler if self.amp else None),
-                                 global_step=self.global_step, best_val=self.best)
+                ep_path = os.path.join(self.ckpt, f"epoch_{(epoch):03d}.pt")
+                _save_checkpoint(
+                    path = ep_path,
+                    model = self.model,
+                    optimizer = self.optimizer,
+                    scheduler = self.scheduler,
+                    epoch = epoch,
+                    extra = {
+                        "val_loss": val_loss,
+                        "val_token_acc": val_acc,
+                        "val_ppl": val_ppl
+                        },
+                    scaler=(self.scaler if self.amp else None),
+                    global_step=self.global_step,
+                    best_val=self.best)
+                logger.info("[mlm] saved checkpoint %s", os.path.basename(ep_path))
                 # epoch metrics
                 try:
                     with open(self.metrics_path, "a") as f:
                         f.write(json.dumps({
                             "type": "epoch",
                             "epoch": epoch,
-                            "val_loss": v_loss,
-                            "val_token_acc": v_acc,
-                            "val_ppl": v_ppl,
+                            "train_loss": train_loss,
+                            "val_loss": val_loss,
+                            "val_token_acc": val_acc,
+                            "val_ppl": val_ppl,
                             "lr": self.optimizer.param_groups[0]["lr"],
                         }) + "\n")
                 except Exception:
                     pass
-                # pointers
-                if v_loss < self.best:
-                    self.best = v_loss; self.best_path = ep_path
+                
+                if val_loss < self.best:
+                    logger.info(
+                        "[mlm] new best @ epoch %03d: val_loss %.4f → %.4f (best.pt)",
+                        epoch, self.best, val_loss
+                    )
+                    self.best = val_loss
+                    self.best_path = ep_path
                     with open(os.path.join(self.ckpt, "best.pt"), "wb") as g, open(ep_path, "rb") as s:
                         g.write(s.read())
                 with open(os.path.join(self.ckpt, "last.pt"), "wb") as g, open(ep_path, "rb") as s:
                     g.write(s.read())
+            
+            # ---- epoch summary to logger (always) ----
+            logger.info(
+                "[mlm] epoch %03d/%03d  train_loss=%.4f  val_loss=%.4f  val_acc=%.3f  ppl=%.2f  lr=%.2e  step=%d",
+                epoch, max_epochs, train_loss, val_loss, val_acc, val_ppl,
+                self.optimizer.param_groups[0]["lr"], self.global_step
+            )
 
         return {"best_path": self.best_path, "best_val_loss": self.best}
     

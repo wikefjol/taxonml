@@ -6,4 +6,7 @@ LOG_KEYS_BATCH = ["epoch","global_step","batch_idx","lr",
                   # per-level (classification):
                   # f"{lvl}_loss_batch", f"{lvl}_acc_batch"
                  ]
+
+# for experiment prep
+REQUIRED_COLS = ["sequence", "kingdom", "phylum", "class", "order", "family", "genus", "species", "species_resolution"]
 CANON_LEVELS = ["phylum", "class", "order", "family", "genus", "species"]

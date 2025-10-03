@@ -1,27 +1,9 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-"""
-MLM pretraining entry point (config-free), styled like finetune.py.
-
-Responsibilities:
-- Deterministic setup, logging
-- Resolve profile-aware data artifacts (prepared.csv under experiments/<exp>/data/<profile>)
-- Build k-mer vocab & preprocessors (derive max_position_embeddings = optimal_length + 2)
-- Build BERT encoder → wrap with tied-weight MLM head (TaxonomyModel.for_pretrain)
-- Create MLMDataset + DataLoaders (shuffle train; no sampler)
-- AdamW + unified scheduler (same pattern as finetune.py)
-- Train with MLMTrainer (saves best.pt + last.pt in run dir)
-- Write a compact results.json and promote best.pt to a global pretrained/<arch_id>/best.pt
-
-Assumptions:
-- prepared.csv has at least: ["sequence", "fold_exp1"]
-- Project modules are importable (installed or on PYTHONPATH)
-"""
-
 from __future__ import annotations
 
-import json
 import logging
+logger = logging.getLogger(__name__)
+
+import json
 import math
 import os
 import random
@@ -76,21 +58,9 @@ from taxml.encoders.bert import derive_arch_id_from_cfg
 from taxml.models.taxonomy_model import TaxonomyModel
 from taxml.training.trainers import MLMTrainer
 from taxml.training.schedulers import build_scheduler_unified
-from taxml.runners.finetune import build_profile_paths
+from taxml.cli.finetune import build_profile_paths
+from taxml.core.logging import setup_logging, attach_file_logger
 
-# ---------- Utilities (same style as finetune.py) ----------------------------
-
-def setup_logging(console_level: int = logging.INFO) -> None:
-    logging.captureWarnings(True)
-    root = logging.getLogger()
-    root.handlers.clear()
-    root.setLevel(logging.DEBUG)
-    fmt = logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-                            datefmt="%Y-%m-%d %H:%M:%S")
-    ch = logging.StreamHandler()
-    ch.setLevel(console_level)
-    ch.setFormatter(fmt)
-    root.addHandler(ch)
 
 def set_all_seeds(seed: int = 42) -> None:
     random.seed(seed)
@@ -144,10 +114,9 @@ def clear_run_dir(run_dir: Path, logger) -> None:
 # ---------- Main -------------------------------------------------------------
 
 def main() -> None:
-    setup_logging(logging.INFO)
-    logger = logging.getLogger("pretrain_v2")
+    setup_logging(console_level=logging.INFO, buffer_early=True)
     logger.info("=== Startup (MLM pretraining) ===")
-    debug = False
+    debug = True
 
     # Full-size defaults (production)
     k = 3
@@ -161,7 +130,7 @@ def main() -> None:
 
     batch_size = 126          # task-specific override from your old config
     base_lr    = 1.8e-4
-    max_epochs = 600
+    max_epochs = 15# 600
     num_workers = 4
     amp = True
 
@@ -184,7 +153,7 @@ def main() -> None:
     # 0) Seeds & device
     set_all_seeds(42)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    logger.info("Device: %s | AMP=%s", device, AMP)
+    logger.info("Device: %s | amp=%s", device, amp)
 
     # 1) Artifacts (profile-aware)
     art = build_profile_paths(EXPERIMENTS_ROOT, EXPERIMENT_NAME, profile)
@@ -293,7 +262,7 @@ def main() -> None:
         lr=LEARNING_RATE, betas=(0.9, 0.999), eps=1e-8
     )
 
-    # 8) Scheduler (unified; match finetune.py style)
+    # 8) Scheduler
     steps_per_epoch = math.ceil(len(ds_train) / max(1, batch_size))
     schedule_by_kind: Dict[str, Any] = {
         "tri": {
@@ -315,7 +284,13 @@ def main() -> None:
     # 9) Run paths & checkpoints
     run_paths = build_pretrain_run_paths(EXPERIMENTS_ROOT, EXPERIMENT_NAME, arch_id, profile)
     clear_run_dir(run_paths["run_dir"], logger)
-    ckpt_dir = run_paths["checkpoints_dir"]; ckpt_dir.mkdir(parents=True, exist_ok=True)
+
+    log_path = run_paths["run_dir"] / "pretrain.log"
+    attach_file_logger(log_path, file_level=logging.DEBUG, flush_buffer=True)
+    logger.info("Logs → %s", log_path)
+
+    ckpt_dir = run_paths["checkpoints_dir"] 
+    ckpt_dir.mkdir(parents=True, exist_ok=True)
     logger.info("Run dirs: arch_root=%s | run_dir=%s", run_paths["arch_root"], run_paths["run_dir"])
 
     # 10) Trainer
@@ -327,11 +302,15 @@ def main() -> None:
         scheduler=scheduler,
         amp=amp,
         log_every=20 if debug else 100,   # optional: chatty in debug
-        checkpoints_dir=str(ckpt_dir),
-        save_every_n_epochs=1,
-)
+        checkpoints_dir=str(ckpt_dir)
+    )
     logger.info("=== Training: start ===")
-    summary = trainer.fit(MAX_EPOCHS, resume=False)
+    
+    summary = trainer.train(
+        max_epochs = max_epochs,
+        resume = False
+        )
+    
     logger.info("=== Training: done ===")
 
     # 11) Results + promote best.pt to PRETRAINED_ROOT/<arch_id>/best.pt
@@ -339,7 +318,7 @@ def main() -> None:
         json.dump({
             "best_val_loss": float(summary.get("best_val_loss", float("inf"))),
             "best_ckpt": summary.get("best_path"),
-            "epochs": MAX_EPOCHS,
+            "epochs": max_epochs,
             "batch_size": batch_size,
             "learning_rate": LEARNING_RATE,
             "weight_decay": WEIGHT_DECAY,

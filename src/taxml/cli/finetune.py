@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
+
+from __future__ import annotations
+import logging
+logger = logging.getLogger(__name__)
 """
 Finetuning entry point for hierarchical (or single-rank) taxonomy classification.
 
@@ -21,7 +25,7 @@ Assumptions:
 - ClassificationTrainer expects labels under "labels_by_level" → we adapt with a tiny Dataset wrapper.
 """
 
-from __future__ import annotations
+
 
 #################################################################
 ##### Chunk 0: Imports, typing, small utilities #################
@@ -33,7 +37,6 @@ import math
 import os
 import random
 import re
-import logging
 import shutil
 from collections import Counter, defaultdict
 import json
@@ -64,21 +67,21 @@ from taxml.models.taxonomy_model import TaxonomyModel
 from taxml.training.trainers import ClassificationTrainer
 from taxml.training.schedulers import build_scheduler_unified
 from taxml.data.samplers import SpeciesBalancedSampler
+from taxml.core.logging import setup_logging, attach_file_logger
+# def setup_logging(console_level: int = logging.INFO) -> None:
+#     # Root config
+#     logging.captureWarnings(True)
+#     root = logging.getLogger()
+#     root.setLevel(logging.DEBUG)
 
-def setup_logging(console_level: int = logging.INFO) -> None:
-    # Root config
-    logging.captureWarnings(True)
-    root = logging.getLogger()
-    root.setLevel(logging.DEBUG)
+#     fmt = logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s",
+#                             datefmt="%Y-%m-%d %H:%M:%S")
 
-    fmt = logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-                            datefmt="%Y-%m-%d %H:%M:%S")
-
-    # Console
-    ch = logging.StreamHandler()
-    ch.setLevel(console_level)
-    ch.setFormatter(fmt)
-    root.addHandler(ch)
+#     # Console
+#     ch = logging.StreamHandler()
+#     ch.setLevel(console_level)
+#     ch.setFormatter(fmt)
+#     root.addHandler(ch)
 
 def set_all_seeds(seed: int) -> None:
     random.seed(seed)
@@ -486,9 +489,10 @@ def main() -> None:
     #ap.add_argument("--pretrained", help="Path to pretrained backbone (overrides derived arch path)")    
     #ap.add_argument("--resume", action="store_true", help="(Reserved) Resume from last.pt if supported by trainer")
     #args = ap.parse_args()
-    logging_level = logging.INFO
-    setup_logging(logging_level)
-    logger = logging.getLogger(__name__)
+    setup_logging(
+        console_level=logging.INFO,
+        buffer_early=True
+        )
     logger.info("=== Startup ===")
 
     # ===== Stage 0: runtime inputs (raw knobs; config-sourced later) =====
@@ -496,7 +500,7 @@ def main() -> None:
     # CLI mock OR global variables
     levels_input = "all"  # CLI
     fold = 7             # CLI
-    debug = False # CLI
+    debug = True # CLI
     # raise "Reconsider max learning rate - you raised it ecently, right?"
     
     PRETRAINED_MODEL_PATH = "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/pretrained_models/bert_h512_L10_H8_i2048_P502/best.pt"  # CLI 
@@ -716,9 +720,9 @@ def main() -> None:
 
     val_loader = DataLoader(
         val_dataset,
-        batch_size=batch_size,
-        shuffle=False,
-        num_workers=num_workers,
+        batch_size  =batch_size,
+        shuffle =False,
+        num_workers =num_workers,
         pin_memory=pin_memory,
         drop_last=False,
         persistent_workers=persistent_workers,
@@ -763,6 +767,10 @@ def main() -> None:
     
     # nuke run dir
     clear_run_dir(run_paths["run_dir"], logger)
+    
+    
+    log_path = run_paths["run_dir"] / "train.log"
+    attach_file_logger(log_path, file_level=logging.DEBUG, flush_buffer=True)
     logger.info("Run dirs: arch_root=%s | fold_dir=%s | run_dir=%s",
             run_paths["arch_root"], run_paths["fold_dir"], run_paths["run_dir"])
     
@@ -785,7 +793,7 @@ def main() -> None:
     # mask_coverage_report(train_dataset, levels, ls, trainer.mask_cache_train, trainer)
 
 
-    logging.info("=== Training: start ===")
+    logger.info("=== Training: start ===")
     # # Note:  The code actually compiles without issue this far.
     # summary = trainer...
 
@@ -794,7 +802,7 @@ def main() -> None:
     trainer.train(
         max_epochs = max_epochs
         )
-    logging.info("=== Training: done ===")
+    logger.info("=== Training: done ===")
 
 
 if __name__ == "__main__":
