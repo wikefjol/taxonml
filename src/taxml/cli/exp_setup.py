@@ -9,21 +9,22 @@ exp_setup.py
 ... to be written later
 """
 
-import argparse
 import json
 import os
+import argparse
 from pathlib import Path
 from typing import Dict, List, Tuple, Iterable, Optional
 
 import numpy as np
 import pandas as pd
 import yaml
-from dotenv import load_dotenv
 from sklearn.model_selection import StratifiedKFold
 
 # Local lib
-from taxml.labels.space import LabelSpace
 from taxml.core.logging import setup_logging, attach_file_logger
+from taxml.core.config import load_config
+from taxml.labels.space import LabelSpace
+
 # ---------------------------
 # Helpers
 # ---------------------------
@@ -40,6 +41,19 @@ REQUIRED_COLS = [
 #         handlers=[logging.FileHandler(log_path), logging.StreamHandler()],
 #     )
 #     logger.info("Logging initialized.") # pr
+
+def _collect_outputs_for_overwrite(paths) -> list[Path]:
+    # everything prep writes
+    targets = [
+        paths["prep_summary_json"],
+        *paths["prepared_csv"].values(),
+        *paths["label_space_json"].values(),
+        paths["fold_masks"]["exp1"]["full"],
+        paths["fold_masks"]["exp1"]["debug"],
+        paths["fold_masks"]["exp2"]["full"],
+        paths["fold_masks"]["exp2"]["debug"],
+    ]
+    return list(dict.fromkeys(targets))
 
 def load_yaml(path: Path) -> Dict:
     with open(path, "r") as f:
@@ -383,155 +397,115 @@ def process_profile(
 # ---------------------------
 
 def main() -> None:
-    setup_logging(console_level=logging.INFO, buffer_early=True)
+    setup_logging(
+        console_level=logging.INFO,
+        buffer_early=True
+        )
+    
     logger.info("=== Prep startup ===")
-
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", required=True, help="Path to master experiment YAML")
+    parser.add_argument("--yes", action="store_true", help="Overwrite existing prep artifacts without prompting")
     args = parser.parse_args()
 
-    # Load env + config
-    root = Path(__file__).resolve().parents[1]
-    env_path = root / ".env"
-    if env_path.exists():
-        load_dotenv(env_path)
+    cfg = load_config(mode = "prep", config_path = args.config,)
+    paths = cfg["paths"]  # alias for readability
 
-    cfg_path = Path(args.config)
-    cfg = load_yaml(cfg_path)
-
-    # Resolve env-backed roots
-    experiments_root = Path(env_expand(cfg["data"]["experiments_root"]))
-    input_dir = Path(env_expand(cfg["data"]["input_dir"]))
-    exp_name = cfg["experiment"]["name"]
-
-    # Paths
-    base_data_dir = Path(
-        cfg["artifacts"]["paths"]["prepared_dir"].format(
-            experiments_root=str(experiments_root),
-            experiment_name=exp_name,
-        )
-    )
-    logs_dir = Path(
-        cfg["artifacts"]["paths"]["logs_dir"].format(
-            experiments_root=str(experiments_root),
-            experiment_name=exp_name,
-        )
-    )
-    log_path = Path(
-        cfg["artifacts"]["paths"]["prep_log"].format(
-            experiments_root=str(experiments_root),
-            experiment_name=exp_name,
-        )
-    )
-    top_summary_path = Path(
-        cfg["artifacts"]["paths"]["prep_summary_json"].format(
-            experiments_root=str(experiments_root),
-            experiment_name=exp_name,
-            prep_summary_filename=cfg["data"]["filenames"]["prep_summary"],
-        )
-    )
-
-    base_data_dir.mkdir(parents=True, exist_ok=True)
-    logs_dir.mkdir(parents=True, exist_ok=True)
-    log_path.parent.mkdir(parents=True, exist_ok=True) # set a parent path 
+    # attach file logger to the resolved prep log
     attach_file_logger(
-        log_path,
-        file_level=logging.DEBUG,
-        flush_buffer=True,   # <-- moves everything logged so far into the file
-    )
+        file_path = paths["prep_log"],
+        file_level = logging.DEBUG,
+        flush_buffer = True
+        )    
+    
+    # Overwrite guard
+    existing = [p for p in _collect_outputs_for_overwrite(paths) if Path(p).exists()]
+    if existing and not args.yes:
+        logger.warning("About to overwrite existing prep artifacts under %s", paths["data_root"])
+        resp = input("Continue? Type 'yes' to proceed: ").strip().lower()
+        if resp != "yes":
+            logger.info("Aborted by user.")
+            return
 
-    # Echo config useful for prep
-    logger.info(f"Experiment: {exp_name}")
-    logger.info(f"Union: {cfg['experiment']['union']}")
-    logger.info(f"Profile (requested): {cfg['experiment'].get('profile', 'full')}")
-    logger.info(f"Input dir: {input_dir}")
-    logger.info(f"Base data dir: {base_data_dir}")
-
-    # Build union
+    # Echo config essentials
+    logger.info("Experiment: %s", cfg["experiment"]["name"])
+    logger.info("Input dir: %s", cfg["data"]["input_dir"])
+    logger.info("Data root: %s", paths["data_root"])
+    
+    # === Ingest & clean ===
     union_key = cfg["experiment"]["union"]
-    members = cfg["data"]["inputs"][union_key]
-    df = read_union_csvs(input_dir, members)
+    members   = cfg["data"]["inputs"][union_key]
+    df = read_union_csvs(cfg["data"]["input_dir"], members)
 
-    # Clean + uppercase
-    if cfg["prep"].get("uppercase_sequences", True):
+    if cfg["prep"]["uppercase_sequences"]:
         df = apply_uppercase(df)
 
+    # === Filtering & Deduping ===
     # Filter by species resolution
-    df = filter_by_resolution(df, cfg["prep"]["min_species_resolution"])
+    df = filter_by_resolution(
+        df = df,
+        min_resolution = cfg["prep"]["min_species_resolution"],
+        )
 
     # Deduplicate within species by sequence content
-    keep_policy = cfg["prep"]["dedupe"].get("keep_policy", "highest_resolution")
-    df = dedupe_within_species_by_sequence(df, keep_policy=keep_policy)
-
-    # --- Derive profiles ---
-    levels = cfg["label_space"]["levels"]
-    folds_cfg  = cfg["prep"]["folds"]
-    folds2_cfg = cfg["prep"]["folds_species_group"]
+    df = dedupe_within_species_by_sequence(
+        df = df,
+        keep_policy=cfg["prep"]["dedupe"].get("keep_policy", "highest_resolution"),
+        )
+    
+    # === Prepare Debug Subset ===
+    dbg = cfg["prep"]["debug_subset"]
+    df_debug = make_debug_subset(
+        df,
+        dbg["n_genera"],
+        dbg["min_species_per_genus"],
+        dbg["target_size"],
+        dbg["seed"]
+    )
+   
+    if len(df_debug) == 0:
+        logging.warning("Debug subset empty; writing empty profile directory & summary.")
+   
+    # === Build profiles ===
+    levels    = cfg["label_space"]["levels"]
+    folds1    = cfg["prep"]["folds"]
+    folds2    = cfg["prep"]["folds_species_group"]
 
     # full profile
-    df_full = df.copy()
-
-    # debug profile (optional)
-    debug_cfg = cfg["prep"]["debug_subset"]
-    df_debug = pd.DataFrame(columns=df.columns)
-    debug_enabled = bool(debug_cfg.get("enabled", False))
-    if debug_enabled:
-        df_debug = make_debug_subset(
-            df_full,
-            n_genera=debug_cfg["n_genera"],
-            min_species_per_genus=debug_cfg["min_species_per_genus"],
-            target_size=debug_cfg["target_size"],
-            seed=debug_cfg["seed"],
-        )
-        if len(df_debug) == 0:
-            logger.warning("Debug subset was requested but empty; skipping debug profile.")
-            debug_enabled = False
-
-    # --- Process profiles symmetrically ---
-    summaries: Dict[str, Dict] = {}
-
-    summaries["full"] = process_profile(
+    summary_full = process_profile(
         profile_name="full",
-        df_in=df_full,
+        df_in=df,
         levels=levels,
-        folds_cfg=folds_cfg,
-        folds2_cfg=folds2_cfg,
-        base_dir=base_data_dir,
+        folds_cfg=folds1,
+        folds2_cfg=folds2,
+        base_dir=paths["data_root"],   # uses the centralised data root
     )
-
-    if debug_enabled:
-        summaries["debug"] = process_profile(
-            profile_name="debug",
-            df_in=df_debug,
-            levels=levels,
-            folds_cfg=folds_cfg,
-            folds2_cfg=folds2_cfg,
-            base_dir=base_data_dir,
-        )
-
-    # --- Top-level summary file ---
+    # debug profile
+    summary_debug = process_profile(
+        profile_name="debug",
+        df_in=df_debug if len(df_debug) else df.head(0),  # emit empty files with headers
+        levels=levels,
+        folds_cfg=folds1,
+        folds2_cfg=folds2,
+        base_dir=paths["data_root"],
+    )
+    
+    # === Produce summary file ===
     top_summary = {
-        "experiment": {
-            "name": exp_name,
-            "union": union_key,
-            "seed": cfg["experiment"]["seed"],
-        },
-        "input": {"dir": str(input_dir), "members": members},
+        "experiment": cfg["experiment"],
+        "input": {"dir": str(cfg["data"]["input_dir"]), "members": members},
         "filters": {
-            "uppercase_sequences": bool(cfg["prep"].get("uppercase_sequences", True)),
-            "min_species_resolution": int(cfg["prep"]["min_species_resolution"]),
+            "uppercase_sequences": cfg["prep"]["uppercase_sequences"],
+            "min_species_resolution": cfg["prep"]["min_species_resolution"],
         },
-        "dedupe": {
-            "scope": cfg["prep"]["dedupe"]["scope"],
-            "keep_policy": keep_policy,
-        },
+        "dedupe": cfg["prep"]["dedupe"],
         "label_space": {"levels": levels},
-        "profiles": summaries,  # contains per-profile paths & stats
-        "artifacts_root": str(base_data_dir),
-        "log_path": str(log_path),
+        "profiles": {"full": summary_full, "debug": summary_debug},
+        "artifacts_root": str(paths["data_root"]),
+        "log_path": str(paths["prep_log"]),
     }
-    write_json(top_summary_path, top_summary)
-    logger.info(f"Wrote top-level prep summary → {top_summary_path}")
+    write_json(paths["prep_summary_json"], top_summary)
+    logger.info("Wrote top-level prep summary -> %s", paths["prep_summary_json"])
     logger.info("✓ Experiment prep complete.")
 
 if __name__ == "__main__":
