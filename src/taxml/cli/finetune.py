@@ -2,52 +2,25 @@
 # -*- coding: utf-8 -*-
 
 from __future__ import annotations
-import logging
-logger = logging.getLogger(__name__)
-"""
-Finetuning entry point for hierarchical (or single-rank) taxonomy classification.
 
-Responsibilities (entry-point scope only):
-- Parse config & CLI, apply profile overrides
-- Resolve artifact paths and create directories
-- Build vocab & preprocessors (and derive max_position_embeddings)
-- Load label space, pick levels, compute class sizes
-- Build encoder & load a pretrained backbone (tolerant mapping), then wrap with the classifier head
-- Build datasets/dataloaders
-- Build optimizer & scheduler
-- Log robust pre-flight diagnostics (env, config, data, model, backbone mapping, scheduler preview)
-- Run training via ClassificationTrainer
-- Emit a compact post-training summary JSON
-
-Assumptions:
-- The project modules are importable (installed or on PYTHONPATH).
-- ClassifyDataset yields {"input_ids", "attention_mask", "labels" {lvl: int}, "species_idx"}.
-- ClassificationTrainer expects labels under "labels_by_level" → we adapt with a tiny Dataset wrapper.
-"""
-
-
-
-#################################################################
-##### Chunk 0: Imports, typing, small utilities #################
-#################################################################
+# Standard library
 import argparse
 import datetime as _dt
 import json
+import logging
 import math
 import os
-import random
 import re
 import shutil
 from collections import Counter, defaultdict
-import json
-import torch
-from torch.utils.data import DataLoader
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
-from transformers import BertConfig, BertModel
+
+# Third-party
 import pandas as pd
 import torch
 from torch.utils.data import DataLoader
+from transformers import BertConfig, BertModel
 
 try:
     import yaml
@@ -55,49 +28,29 @@ except Exception as e:  # pragma: no cover
     raise RuntimeError("PyYAML is required: pip install pyyaml") from e
 
 # Project modules
-from taxml.core.config import build_profile_paths
-from taxml.preprocessing.vocab import Vocabulary, KmerVocabConstructor
+from taxml.core.config import load_config
+from taxml.core.logging import setup_logging, attach_file_logger
+from taxml.core.randomness import set_all_seeds
+from taxml.data.datasets import ClassifyDataset
+from taxml.data.samplers import SpeciesBalancedSampler
+from taxml.encoders.bert import load_pretrained_backbone
+from taxml.labels.encoder import LabelEncoder
+from taxml.labels.space import LabelSpace
+from taxml.models.taxonomy_model import TaxonomyModel
 from taxml.preprocessing import augmentation, tokenization, padding, truncation
 from taxml.preprocessing.preprocessor import Preprocessor
-from taxml.data.datasets import ClassifyDataset
-from taxml.labels.space import LabelSpace
-from taxml.labels.encoder import LabelEncoder
-from taxml.encoders.bert import load_pretrained_backbone, derive_arch_id_from_cfg
-from taxml.models.taxonomy_model import TaxonomyModel
-from taxml.training.trainers import ClassificationTrainer
+from taxml.preprocessing.vocab import Vocabulary, KmerVocabConstructor
 from taxml.training.schedulers import build_scheduler_unified
-from taxml.data.samplers import SpeciesBalancedSampler
-from taxml.core.logging import setup_logging, attach_file_logger
-# def setup_logging(console_level: int = logging.INFO) -> None:
-#     # Root config
-#     logging.captureWarnings(True)
-#     root = logging.getLogger()
-#     root.setLevel(logging.DEBUG)
+from taxml.training.trainers import ClassificationTrainer
 
-#     fmt = logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-#                             datefmt="%Y-%m-%d %H:%M:%S")
+# Logging setup
+logger = logging.getLogger(__name__)
 
-#     # Console
-#     ch = logging.StreamHandler()
-#     ch.setLevel(console_level)
-#     ch.setFormatter(fmt)
-#     root.addHandler(ch)
 
-def set_all_seeds(seed: int) -> None:
-    random.seed(seed)
-    os.environ["PYTHONHASHSEED"] = str(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
 
 #################################################################
 ##### Chunk 1: Config loading & path resolution #################
 #################################################################
-def derive_arch_id(cfg: Dict[str, Any]) -> str:
-    enc = cfg["model"]["encoder"]
-    return f"bert_h{enc['hidden_size']}_L{enc['num_hidden_layers']}_H{enc['num_attention_heads']}"
-
 
 def validate_datasets_and_log(
     *,
@@ -293,47 +246,6 @@ def group_params_yaml(model, indent: int = 2) -> str:
 
 
 
-def resolve_paths(cfg: Dict[str, Any]) -> Dict[str, str]:
-    """Render templates under artifacts.* with base substitutions and ensure dirs exist."""
-    def _expand(s: str) -> str:
-        return os.path.expanduser(os.path.expandvars(s or ""))
-
-    art = cfg["artifacts"]
-    roots = art.get("roots", {})
-    exp_root = _expand(roots.get("experiments", cfg.get("data", {}).get("experiments_root", "")))
-    pre_root = _expand(roots.get("pretrained", ""))
-
-    base = {
-        "experiments": exp_root,
-        "pretrained": pre_root,
-        "experiment": cfg["experiment"]["name"],
-        "task": cfg["runtime"].get("task", "finetune"),
-        "fold": int(cfg["runtime"].get("fold_index", 1)),
-        "prepared_filename": cfg.get("data", {}).get("filenames", {}).get("prepared", "prepared_dataset.csv"),
-        "debug_filename": cfg.get("data", {}).get("filenames", {}).get("debug", "debug.csv"),
-        "label_space_filename": cfg.get("data", {}).get("filenames", {}).get("label_space", "label_space.json"),
-        "prep_summary_filename": cfg.get("data", {}).get("filenames", {}).get("prep_summary", "prep_summary.json"),
-    }
-
-    ns = art["experiments"]
-    out: Dict[str, str] = {}
-    if "run_dir" in ns:
-        out["run_dir"] = ns["run_dir"].format(**base)
-
-    for k, tpl in ns.items():
-        if k in out:
-            continue
-        out[k] = tpl.format(**base)
-
-    # mkdirs
-    for key in ("run_dir", "checkpoints_dir", "logs_dir"):
-        if key in out:
-            Path(out[key]).mkdir(parents=True, exist_ok=True)
-
-    out["pretrained_root"] = pre_root
-    return out
-
-
 #################################################################
 ##### Chunk 2: CLI & level selection ############################
 #################################################################
@@ -405,53 +317,11 @@ def _load_fold_masks(masks_path: str, fold_id: int, levels: list[str],
     logger.info("Loaded fold masks: %s | levels=%s", Path(masks_path).name, levels)
     return masks_train, masks_val
 
-# # ---- Phase A (no arch_id needed): data/prep paths ----
-# def build_prep_paths(experiments_root: str | Path, experiment_name: str) -> Dict[str, Path]:
-#     exp_root = Path(experiments_root) / experiment_name
-#     data_dir = exp_root / "data"
-#     return {
-#         "exp_root": exp_root,
-#         "data_dir": data_dir,
-#         "prepared_csv": data_dir / "prepared_dataset.csv",
-#         "debug_csv": data_dir / "debug.csv",
-#         "label_space_json": data_dir / "label_space.json",
-#         "fold_masks_exp1": data_dir / "fold_masks_exp1.json",
-#         "fold_masks_exp2": data_dir / "fold_masks_exp2.json",
-#         "prep_summary_json": data_dir / "prep_summary.json",
-#         "logs_dir": exp_root / "logs",
-#     }
-# from pathlib import Path
 
-
-
-
-# ---- Phase B (needs arch_id + fold + levels): training/run paths ----
 def ranks_code(levels: List[str]) -> str:
     """e.g. ['phylum','class','order','family','genus','species'] -> 'ranks_6_pcofgs'"""
     abbrev = "".join(l.strip().lower()[0] for l in levels)
     return f"ranks_{len(levels)}_{abbrev}"
-
-def build_run_paths(
-    experiments_root: str | Path,
-    experiment_name: str,
-    arch_id: str,
-    fold: int,
-    levels: List[str],
-    profile: str,
-) -> Dict[str, Path]:
-    exp_root = Path(experiments_root) / experiment_name
-    arch_root = exp_root / arch_id / profile
-    task = ranks_code(levels)                    # <<< was 'single_x' or 'hierarchical'
-    fold_dir = arch_root / "folds" / f"fold_{fold:02d}"
-    run_dir  = fold_dir / task
-    return {
-        "arch_root": arch_root,
-        "fold_dir": fold_dir,
-        "run_dir": run_dir,
-        "checkpoints_dir": run_dir / "checkpoints",
-        "history_file": run_dir / "history.json",
-        "results_file": run_dir / "results.json",
-    }
 
 def clear_run_dir(run_dir: Path, logger) -> None:
     if run_dir.exists():
@@ -459,170 +329,79 @@ def clear_run_dir(run_dir: Path, logger) -> None:
         shutil.rmtree(run_dir)
     run_dir.mkdir(parents=True, exist_ok=True)
 
-### DEBUG PROBERS: 
-def mask_coverage_report(train_dataset, levels, ls, mask_cache, trainer):
-    print("\n[CHECK] mask coverage on debug-train data")
-    for lvl in levels:
-        l2i = ls.label_to_idx[lvl]
-        # collect encoded label ids from the dataset (global ids in LabelSpace)
-        ids = []
-        for i in range(len(train_dataset)):
-            ids.append(int(train_dataset[i]["labels_by_level"][lvl]))
-        ids = torch.tensor(ids, device=trainer.device)
-
-        active_idx, remap = mask_cache[lvl]
-        valid = (remap[ids] != IGNORE_INDEX)
-        print(f"{lvl:7s} | C_full={remap.numel():>6} | C_active={active_idx.numel():>6} "
-            f"| n_items={len(ids):>6} | valid%={valid.float().mean().item():.4f}")
-
-
-_ARCH_DIR_RE = re.compile(r"^bert_h\d+_L\d+_H\d+_i\d+_P\d+$")
-#################################################################
-##### Chunk 5: Main #############################################
-#################################################################
 def main() -> None:
     # -------- CLI
-    #ap = argparse.ArgumentParser(description="Finetune hierarchical/single-rank taxonomy classifier")
-    #ap.add_argument("--config", required=True, help="Path to master experiment YAML")
-    #ap.add_argument("--levels", required=True, help="Comma-separated levels (e.g., 'species' or 'phylum,class,...'). Or all for full hierarchy.")
-    #ap.add_argumetn("--fold", required=True, help"k-Fold index to train over, in [1,2,...,10])
-    #ap.add_argument("--pretrained", help="Path to pretrained backbone (overrides derived arch path)")    
-    #ap.add_argument("--resume", action="store_true", help="(Reserved) Resume from last.pt if supported by trainer")
-    #args = ap.parse_args()
+    ap = argparse.ArgumentParser(description="Finetune hierarchical/single-rank taxonomy classifier")
+    ap.add_argument("--config", required=True, help="Path to master experiment YAML")
+    ap.add_argument("--levels", required=True, help="Comma-separated levels, or 'all'")
+    ap.add_argument("--fold", type=int, required=True, help="Fold index in [1..k]")
+    ap.add_argument("--scheme", choices=["exp1","exp2"], default=None, help="Fold scheme (optional; defaults to exp1)")
+    ap.add_argument("--debug", action="store_true", help="Apply debug_overrides")
+    args = ap.parse_args()
     setup_logging(
         console_level=logging.INFO,
         buffer_early=True
         )
     logger.info("=== Startup ===")
 
-    # ===== Stage 0: runtime inputs (raw knobs; config-sourced later) =====
-    #     
-    # CLI mock OR global variables
-    levels_input = "all"  # CLI
-    fold = 7             # CLI
-    debug = True # CLI
-    # raise "Reconsider max learning rate - you raised it ecently, right?"
+    # Resolve levels
+    levels_req = parse_levels(args.levels)
+
+    # Load effective config
+    cfg = load_config(
+        mode = "finetune",
+        config_path = args.config,
+        debug = args.debug,
+        levels = levels_req,
+        fold_index = args.fold,
+        fold_scheme = args.scheme,
+    )
+
+    paths = cfg["paths_active"]
+    task  = cfg["finetune"]
+    prep  = cfg["preprocessing"]
+    enc   = cfg["model"]["encoder"]
+    arch_id  = cfg["arch"]["id"]
+    profile = "debug" if cfg["runtime"]["debug"] else "full"
     
-    PRETRAINED_MODEL_PATH = "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/pretrained_models/bert_h512_L10_H8_i2048_P502/best.pt"  # CLI 
-    EXPERIMENTS_ROOT = "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/experiments"  # GLOBAL?
-    
-    # # # Config mock
-    EXPERIMENT_NAME  = "sequence_fold_full"
-    seed = 42
-    k = 3
-    max_bases = 1500
-    modification_probability = 0.01
-    alphabet = ["A","C","T","G"]
-
-    hidden_size=512
-    num_hidden_layers=10
-    num_attention_heads=8
-    intermediate_size=2048
-    hidden_dropout_prob=0.1
-    attention_probs_dropout_prob=0.1
-
-    hierarchical_dropout=0.1
-    bottleneck = 256
-
-    weight_decay = 0.1
-    base_lr = 0.0001
-    batch_size   = 128
-    num_workers  = 4
-    pin_memory   = True
-    drop_last_tr = True
-    max_epochs = 10
-
-    # Scheduler knobs
-    common_floor  = {"min_factor": 1e-2}
-    common_warmup = {"type": "linear", "duration": 1}
-    SCHED_KIND = "tri"
-    SCHED_BASE = "step"
-
-    # === Profile switch (subset mode) ===
-    if debug:
-        max_bases = 600
-        hidden_size=64
-        num_hidden_layers=2
-        num_attention_heads=2
-        intermediate_size=256
-        PRETRAINED_MODEL_PATH = "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/pretrained_models/bert_h64_L2_H2_i256_P202/best_clean.pt"
-
-    profile = "debug" if debug else "full"
-    logger.info("Active profile: %s", profile)
-
-    schedule_by_kind = {
-        "tri": {
-            "base": SCHED_BASE,
-            "warmup": common_warmup,
-            "main": {"type": "tri", "plateau": 3, "decay": 8},
-            "floor": common_floor,
-        },
-        "cosine": {
-            "base": SCHED_BASE,
-            "warmup": common_warmup,
-            "main": {"type": "cosine", "epochs": 10},
-            "floor": common_floor,
-        },
-        "cosine_restarts": {
-            "base": SCHED_BASE,
-            "warmup": common_warmup,
-            "main": {"type": "cosine_restarts", "cycle_epochs": 5, "num_cycles": 3, "t_mult": 1.0, "peak_decay": 0.8},
-            "floor": common_floor,
-        },
-    }
-
-    use_amp = True
-    log_every = 5
-
-    # === NEW: profile-aware artifact resolution ===
-    art = build_profile_paths(EXPERIMENTS_ROOT, EXPERIMENT_NAME, profile)
-    DATA_PATH        = art["prepared_csv"]
-    LABEL_SPACE_PATH = art["label_space_json"]
-
-    # Choose which fold scheme to use
-    FOLD_SCHEME = "exp1"   # or "exp2"
-    FOLD_MASKS_PATH = art["fold_masks_exp1"] if FOLD_SCHEME == "exp1" else art["fold_masks_exp2"]
-
-    logger.info("Artifacts (profile=%s):", profile)
-    logger.info("  prepared_csv     = %s", DATA_PATH)
-    logger.info("  label_space_json = %s", LABEL_SPACE_PATH)
-    logger.info("  fold_masks_json  = %s", FOLD_MASKS_PATH)
+    logger.info("=== Runtime summary ===" )
+    logger.info("experiment=%s | runtime=%s | profile=%s | arch_id=%s",
+                cfg["experiment"]["name"], cfg["runtime"], profile, arch_id)
+    logger.info("active data: prepared_csv=%s | label_space_json=%s | fold_masks=%s",
+                paths["data"]["prepared_csv"], paths["data"]["label_space_json"], paths["data"]["fold_masks"])
 
     # ===== Stage 1: seeds & device =====
-    set_all_seeds(seed)
+    set_all_seeds(cfg["experiment"]["seed"])
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info("Device: %s", device)
 
     # ===== Stage 2: label space =====
-    levels = parse_levels(levels_input)
-
-    art["logs_dir"].mkdir(parents=True, exist_ok=True)
-    ls = LabelSpace.from_json(LABEL_SPACE_PATH)
+    levels = list(task["levels"])
+    paths["logs_dir"].mkdir(parents=True, exist_ok=True)
+    ls = LabelSpace.from_json( paths["data"]["label_space_json"])
     ls.validate_levels(levels)
-
-    logger.info("=== Label Space ===")
+    
     class_sizes = {lvl: ls.num_classes(lvl) for lvl in levels}
     logger.info("Number of classes for active ranks: \n%s", json.dumps(class_sizes, indent=2, ensure_ascii=False))
 
     # ===== Stage 3: preprocessing =====
     logger.info("=== Vocab ===")
     vocab = Vocabulary()
-    vocab.build_from_constructor(KmerVocabConstructor(k=k, alphabet=alphabet))
+    vocab.build_from_constructor(KmerVocabConstructor(k=prep["k"], alphabet=prep["alphabet"]))
     logger.info("Vocabulary:\n%s", vocab)
 
-    assert max_bases % k == 0, "max_bases must be divisible by k"
-    optimal_length = max_bases // k
-    
     logger.info("=== Preprocesessors ===")
 
-    tok   = tokenization.KmerStrategy(k=k, padding_alphabet=alphabet)
-    pad   = padding.PaddingEndStrategy(optimal_length=optimal_length)
-    trunc = truncation.SlidingWindowTruncationStrategy(optimal_length=optimal_length)
+    tok   = tokenization.KmerStrategy(k = prep["k"], alphabet = prep["alphabet"])
+    pad   = padding.PaddingEndStrategy(optimal_length = prep["optimal_length"])
+    trunc = truncation.SlidingWindowTruncationStrategy(optimal_length = prep["optimal_length"])
 
-    modifier  = augmentation.SequenceModifier(alphabet)
-    aug_train = augmentation.BaseStrategy(modifier=modifier,
-                                          alphabet=alphabet,
-                                          modification_probability=modification_probability)
+    modifier  = augmentation.SequenceModifier(alphabet = prep["alphabet"])
+    aug_train = augmentation.BaseStrategy(
+        modifier = modifier,
+        alphabet = prep["alphabet"],
+        modification_probability = prep["mod_prob"]
+    )
     aug_eval  = augmentation.IdentityStrategy()
 
     preproc_train = Preprocessor(aug_train, tok, pad, trunc, vocab)
@@ -634,32 +413,28 @@ def main() -> None:
     logger.info("=== Encoder ===")
     bert_config = BertConfig(
         vocab_size=len(vocab),
-        hidden_size=hidden_size,
-        num_hidden_layers=num_hidden_layers,
-        num_attention_heads=num_attention_heads,
-        intermediate_size=intermediate_size,
-        hidden_dropout_prob=hidden_dropout_prob,
-        attention_probs_dropout_prob=attention_probs_dropout_prob,
-        max_position_embeddings=optimal_length + 2,
+        hidden_size=enc["hidden_size"],
+        num_hidden_layers=enc["num_hidden_layers"],
+        num_attention_heads=enc["num_attention_heads"],
+        intermediate_size=enc["intermediate_size"],
+        hidden_dropout_prob=enc["hidden_dropout_prob"],
+        attention_probs_dropout_prob=enc["attention_probs_dropout_prob"],
+        max_position_embeddings=prep["max_position_embeddings"],
     )
-    arch_id = derive_arch_id_from_cfg(bert_config)
     encoder = BertModel(bert_config)
     logger.info("arch_id=%s", arch_id)
     logger.debug("Encoder repr:\n%s", repr(encoder))  # keep detailed tree at DEBUG
 
     # ===== Stage 5: load pretrained encoder =====
-    pretrained_path = Path(PRETRAINED_MODEL_PATH).expanduser().resolve()
+    pretrained_path = Path(task["backbone"]["path"]).expanduser().resolve()
     ckpt = torch.load(pretrained_path, map_location="cpu")
-    #print("Checkpoint keys (first 20):", list(ckpt["model"].keys())[:20])
-    #print("Encoder keys (first 20):", list(encoder.state_dict().keys())[:20])
-    loaded_keys = load_pretrained_backbone(encoder, pretrained_path, strict=True)
-    #logger.info("Loaded tensors: %d from %s", len(loaded_keys), pretrained_path)
+    loaded_keys = load_pretrained_backbone(encoder, pretrained_path, strict=task["backbone"]["strict"])
     logger.info(encoder)
     
     # ===== Stage 6: Setup model with hierarchical head =====
     head_cfg = dict(
-    hierarchical_dropout=hierarchical_dropout,
-    bottleneck=bottleneck,
+        hierarchical_dropout = task["head"]["hierarchical_dropout"],
+        bottleneck = task["head"]["bottleneck"],
     )
     model = TaxonomyModel.for_classify(
         encoder=encoder,
@@ -672,11 +447,16 @@ def main() -> None:
     
     
     # -------- Data split
-    df = pd.read_csv(DATA_PATH)
-    assert {"sequence", "fold_exp1", *levels}.issubset(df.columns), \
-        "CSV must contain 'sequence', 'fold_exp1', and all requested levels"
-    df_train = df[df["fold_exp1"] != fold].reset_index(drop=True)
-    df_val = df[df["fold_exp1"] == fold].reset_index(drop=True)
+    df = pd.read_csv(paths["data"]["prepared_csv"])
+    
+    fold_col = "fold_exp1" if task["fold_scheme"] == "exp1" else "fold_exp2"
+    need_cols = {"sequence", fold_col, *levels}
+    assert need_cols.issubset(df.columns), f"CSV must contain {need_cols}"
+    
+    fold = int(task["fold_index"])
+    df_train = df[df[fold_col] != fold].reset_index(drop=True)
+    df_val   = df[df[fold_col] == fold].reset_index(drop=True)
+
     logger.info("len(df_train): %r", len(df_train))
     logger.info("head: %r", df_train.head())
     logger.info("len(df_val): %r", len(df_val))
@@ -689,23 +469,30 @@ def main() -> None:
     train_dataset = ClassifyDataset(df_train, preproc_train, label_enc, levels)
     val_dataset = ClassifyDataset(df_val, preproc_val, label_enc, levels)
     
-    # Out commented but valid:
-    # validate_datasets_and_log(
-    #     train_dataset=train_dataset,
-    #     val_dataset=val_dataset,
-    #     levels=levels,
-    #     class_sizes=class_sizes,
-    #     optimal_length=optimal_length,
-    #     logger=logger,
-    #     sample_size_for_stats=min(2048, len(train_dataset))
-    # )
+    # #Out commented but valid:
+    validate_datasets_and_log(
+        train_dataset=train_dataset,
+        val_dataset=val_dataset,
+        levels=levels,
+        class_sizes=class_sizes,
+        optimal_length=prep["optimal_length"],
+        logger=logger,
+        sample_size_for_stats=min(2048, len(train_dataset))
+    )
+
     logger.info(f"Train set: {train_dataset.__repr__()}")
     logger.info(f"Val set: {val_dataset.__repr__()}")
 
 
     logger.info("=== Dataloaders ===")
+    dl = task["dataloader"]
+    batch_size   = dl["batch_size"]
+    num_workers  = dl["num_workers"]
+    pin_memory   = dl["pin_memory"]
+    drop_last_tr = dl["drop_last_train"]
     persistent_workers = (num_workers > 0)
     train_sampler = SpeciesBalancedSampler.from_dataset(train_dataset)
+    
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
@@ -715,23 +502,21 @@ def main() -> None:
         pin_memory=pin_memory,
         drop_last=drop_last_tr,
         persistent_workers=persistent_workers,
-        prefetch_factor=4 if num_workers > 0 else None,
+        prefetch_factor=dl.get("prefetch_factor"),
     )
 
     val_loader = DataLoader(
         val_dataset,
-        batch_size  =batch_size,
-        shuffle =False,
-        num_workers =num_workers,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
         pin_memory=pin_memory,
         drop_last=False,
         persistent_workers=persistent_workers,
-        prefetch_factor=4 if num_workers > 0 else None,
+        prefetch_factor=dl.get("prefetch_factor"),
     )
+    
     logger.info("Dataloaders set up complete")
-    
-    
-    # steps_per_epoch = math.ceil(len(train_dataset) / max(1, batch_size))
     steps_per_epoch = (
         len(train_sampler) // batch_size if drop_last_tr
          else math.ceil(len(train_sampler) / batch_size)
@@ -746,35 +531,33 @@ def main() -> None:
              no_decay_params.append(param) 
         else: decay_params.append(param)
 
+    opt = task["optimizer"]
     optimizer = torch.optim.AdamW(
-        [{"params": decay_params, "weight_decay": weight_decay},
-        {"params": no_decay_params, "weight_decay": 0.0}],
-        lr=base_lr, betas=(0.9, 0.999), eps=1e-8
+        [{"params": decay_params, "weight_decay": opt["weight_decay"]},
+         {"params": no_decay_params, "weight_decay": 0.0}],
+        lr=opt["learning_rate"], betas=tuple(opt["betas"]), eps=opt["eps"]
     )
     
-    
     logger.info("=== Optimizer ===")
-    logger.info(f"AdamW: lr={base_lr:.3e}, weight_decay={weight_decay}.")
+    logger.info("AdamW: lr=%.3e, weight_decay=%.3g.", opt["learning_rate"], opt["weight_decay"])
     logger.info("Param groups (YAML): \n%s", group_params_yaml(model))
     
-    schedule = schedule_by_kind[SCHED_KIND]
-    logger.info("Optimzier schedule: \n%r", schedule)
+    sched_kind = task["scheduler"]["kind"]
+    schedule = cfg["scheduler_catalog"][sched_kind]
+    logger.info("Optimizer schedule kind=%s", sched_kind)
     scheduler = build_scheduler_unified(optimizer, steps_per_epoch, schedule)
     
-    masks_train, masks_val = _load_fold_masks(FOLD_MASKS_PATH, fold, levels, class_sizes, logger)
+    masks_train, masks_val = _load_fold_masks(paths["data"]["fold_masks"], fold, levels, class_sizes, logger)
+
+    # Run paths from config
+    run = paths["finetune"]
+    clear_run_dir(Path(run["run_dir"]), logger)
+    Path(run["checkpoints_dir"]).mkdir(parents=True, exist_ok=True)
+    attach_file_logger(Path(run["log_file"]), file_level=logging.DEBUG, flush_buffer=True)
+    logger.info("Run dirs: arch_root=%s | fold_dir=%s | run_dir=%s | log_file=%s",
+                run["arch_root"], run["fold_dir"], run["run_dir"], run["log_file"])
     
-    run_paths = build_run_paths(EXPERIMENTS_ROOT, EXPERIMENT_NAME, arch_id, fold, levels, profile)  # <-- pass profile
-    
-    # nuke run dir
-    clear_run_dir(run_paths["run_dir"], logger)
-    
-    
-    log_path = run_paths["run_dir"] / "train.log"
-    attach_file_logger(log_path, file_level=logging.DEBUG, flush_buffer=True)
-    logger.info("Run dirs: arch_root=%s | fold_dir=%s | run_dir=%s",
-            run_paths["arch_root"], run_paths["fold_dir"], run_paths["run_dir"])
-    
-    CHECKPOINTS_DIR = run_paths["checkpoints_dir"]
+    CHECKPOINTS_DIR = Path(run["checkpoints_dir"])
     CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
     trainer = ClassificationTrainer(
         model=model,
@@ -785,25 +568,28 @@ def main() -> None:
         masks_val=masks_val,
         optimizer=optimizer,
         scheduler=scheduler,
-        amp=use_amp,
-        log_every=log_every,
+        amp = task["trainer"]["amp"],
+        log_every = task["trainer"]["log_every"],
         checkpoints_dir=CHECKPOINTS_DIR,
         select_best_by="species" if "species" in levels else levels[-1],
     )
-    # mask_coverage_report(train_dataset, levels, ls, trainer.mask_cache_train, trainer)
-
-
-    logger.info("=== Training: start ===")
-    # # Note:  The code actually compiles without issue this far.
-    # summary = trainer...
-
-    # Smoke
-    logger.info("SMOKE: Trainer")
-    trainer.train(
-        max_epochs = max_epochs
-        )
+    summary = trainer.train(max_epochs=task["trainer"]["max_epochs"])
     logger.info("=== Training: done ===")
 
-
+    # Results summary
+    with open(run["results_file"], "w") as f:
+        json.dump(
+            {
+                "epochs": task["trainer"]["max_epochs"],
+                "batch_size": dl["batch_size"],
+                "learning_rate": opt["learning_rate"],
+                "weight_decay": opt["weight_decay"],
+                "levels": levels,
+                "fold_index": fold,
+                "fold_scheme": task["fold_scheme"],
+            },
+            f,
+            indent=2,
+        )
 if __name__ == "__main__":
     main()

@@ -38,7 +38,7 @@ class TaxonomyModel(nn.Module):
         vocab_size: Optional[int] = None,
         mlm_hidden: Optional[int] = None,
         mlm_dropout: float = 0.1,
-        tie_mlm_to_embeddings: bool = True,
+        tie_emb: bool = True,
     ) -> None:
         super().__init__()
         self._mode: Literal["pretrain", "classify"] = mode
@@ -64,7 +64,7 @@ class TaxonomyModel(nn.Module):
                                     dropout=mlm_dropout, hidden_dim=mlm_hidden)
 
             # Optionally tie decoder weights to input token embeddings
-            if tie_mlm_to_embeddings:
+            if tie_emb:
                 token_embeddings: Optional[nn.Embedding] = getattr(
                     getattr(self.encoder, "embeddings", None), "word_embeddings", None
                 )
@@ -210,7 +210,7 @@ class TaxonomyModel(nn.Module):
         vocab_size: int,
         mlm_hidden: Optional[int] = None,
         mlm_dropout: float = 0.1,
-        tie_mlm_to_embeddings: bool = True,
+        tie_emb: bool = True,
     ) -> "TaxonomyModel":
         return cls(
             encoder=encoder,
@@ -218,7 +218,7 @@ class TaxonomyModel(nn.Module):
             vocab_size=vocab_size,
             mlm_hidden=mlm_hidden,
             mlm_dropout=mlm_dropout,
-            tie_mlm_to_embeddings=tie_mlm_to_embeddings,
+            tie_emb=tie_emb,
         )
 
     @classmethod
