@@ -1,12 +1,9 @@
-# Minimal prep-only config (consumed by core.config.load_config(mode="prep"))
-
 experiment:
   name: "sequence_fold_full"
   seed: 42
   union: "standard"   # must match a key under data.inputs
 
 data:
-  # Absolute paths only (no env indirection)
   experiments_root: "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/experiments"
   input_dir: "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/blast_filtered"
   filenames:
@@ -17,6 +14,37 @@ data:
 
 label_space:
   levels: ["phylum", "class", "order", "family", "genus", "species"]
+
+preprocessing:
+  alphabet: ["A","C","G","T"]
+  k: 3
+  max_bases: 1500
+
+model:
+  encoder:
+    hidden_size: 512
+    num_hidden_layers: 10
+    num_attention_heads: 8
+    intermediate_size: 2048
+    hidden_dropout_prob: 0.10
+    attention_probs_dropout_prob: 0.10
+
+scheduler_catalog:
+  tri:
+    base: "step"
+    warmup: { type: "linear", duration: 1 }
+    main:   { type: "tri", plateau: 3, decay: 8 }
+    floor:  { min_factor: 1.0e-2 }
+  cosine:
+    base: "step"
+    warmup: { type: "linear", duration: 1 }
+    main:   { type: "cosine", epochs: 10 }
+    floor:  { min_factor: 1.0e-2 }
+  cosine_restarts:
+    base: "step"
+    warmup: { type: "linear", duration: 1 }
+    main:   { type: "cosine_restarts", cycle_epochs: 5, num_cycles: 3, t_mult: 1.0, peak_decay: 0.8 }
+    floor:  { min_factor: 1.0e-2 }
 
 prep:
   uppercase_sequences: true
@@ -37,3 +65,80 @@ prep:
     min_species_per_genus: 2
     target_size: 10000
     seed: 42
+
+tasks:
+  pretrain:
+    # fold_index comes from runtime (CLI/caller), not YAML
+    mlm:
+      masking_pct: 0.15
+      mlm_dropout: 0.10
+      tie_to_embeddings: true
+    dataloader:
+      batch_size: 126
+      num_workers: 4
+      pin_memory: true
+      drop_last_train: true
+      prefetch_factor: 4
+    optimizer:
+      learning_rate: 1.8e-4
+      weight_decay: 0.01
+      betas: [0.9, 0.999]
+      eps: 1.0e-8
+    scheduler:
+      kind: "tri"   # key into scheduler_catalog
+    trainer:
+      max_epochs: 600
+      amp: true
+      log_every: 100
+      save_every_epochs: 1
+    promotion:
+      pretrained_root: "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/pretrained_models"
+
+  finetune:
+    # levels and fold_index come from runtime (CLI/caller), not YAML
+    fold_scheme: "exp1"  # default used if omitted
+    head:
+      hierarchical_dropout: 0.10
+      bottleneck: 256
+    backbone:
+      path: "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/pretrained_models/bert_h512_L10_H8_i2048_P502/best.pt"
+      strict: true
+    dataloader:
+      batch_size: 128
+      num_workers: 4
+      pin_memory: true
+      sampler: "species_balanced"   # informational
+      drop_last_train: true
+      prefetch_factor: 4
+    optimizer:
+      learning_rate: 1.0e-4
+      weight_decay: 0.10
+      betas: [0.9, 0.999]
+      eps: 1.0e-8
+    scheduler:
+      kind: "tri"
+    trainer:
+      max_epochs: 10
+      amp: true
+      log_every: 5
+
+profiles:
+  debug:
+    preprocessing:
+      max_bases: 600
+    model:
+      encoder:
+        hidden_size: 64
+        num_hidden_layers: 2
+        num_attention_heads: 2
+        intermediate_size: 256
+    tasks:
+      pretrain:
+        dataloader: { batch_size: 16, num_workers: 0, pin_memory: true, drop_last_train: true, prefetch_factor: null }
+        trainer:   { max_epochs: 2, amp: false, log_every: 20, save_every_epochs: 1 }
+      finetune:
+        backbone:
+          path: "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/pretrained_models/bert_h64_L2_H2_i256_P202/best_clean.pt"
+          strict: true
+        dataloader: { batch_size: 16, num_workers: 0, pin_memory: true, drop_last_train: true, prefetch_factor: null }
+        trainer:   { max_epochs: 2, amp: false, log_every: 5 }
