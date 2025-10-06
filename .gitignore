@@ -123,3 +123,4 @@ cython_debug/
 .spyderproject
 .spyproject
 .ropeproject
+/src/taxonml/
