@@ -28,11 +28,16 @@ tmp.py
 *.bak
 
 # Logs / checkpoints / model weights
+
+/logs/
+/sbatch_logs/
 *.log
 *.ckpt
 *.pt
 *.pth
 
+# batch jobs
+finetune_model.sh
 # OS cruft
 .DS_Store
 
