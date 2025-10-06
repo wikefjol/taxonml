@@ -28,100 +28,22 @@ import argparse
 from pathlib import Path
 from typing import Any, Dict
 
-# # ==== USER SETTINGS (edit these to your environment) =========================
-# EXPERIMENTS_ROOT = "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/experiments"
-# PRETRAINED_ROOT  = "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/pretrained_models"
-# EXPERIMENT_NAME  = "sequence_fold_full"
-# # PROFILE          = "full"   # "full" | "debug"
-# FOLD             = 7        # used to carve train/val as in prior code (fold_exp1)
-
-# # Tokenizer / sequence params (from your old config)
-# # K                    = 3
-# # MAX_BASES            = 1500
-# ALPHABET             = ["A", "C", "G", "T"]
-# MLM_MASKING_PCT      = 0.15
-
-# # Encoder (from your old config)
-# # HIDDEN_SIZE          = 512
-# # NUM_LAYERS           = 10
-# # NUM_HEADS            = 8
-# # INTERMEDIATE_SIZE    = 2048
-# DROPOUT_HIDDEN       = 0.10
-# DROPOUT_ATTENTION    = 0.10
-
-# # Training defaults (from your old config; pretrain task overrides)
-# BATCH_SIZE           = 160
-# LEARNING_RATE        = 1.8e-4
-# WEIGHT_DECAY         = 0.01
-# MAX_EPOCHS           = 600
-# AMP                  = True
-# NUM_WORKERS          = 4
-# PIN_MEMORY           = True
-# LOG_EVERY            = 100
-# SAVE_EVERY_EPOCHS    = 1
-# # ============================================================================
-
 # Project modules
 from taxml.preprocessing.vocab import Vocabulary, KmerVocabConstructor
 from taxml.preprocessing import augmentation, tokenization, padding, truncation
 from taxml.preprocessing.preprocessor import Preprocessor
 from taxml.data.datasets import MLMDataset
-from taxml.encoders.bert import derive_arch_id_from_cfg
 from taxml.models.taxonomy_model import TaxonomyModel
 from taxml.training.trainers import MLMTrainer
 from taxml.training.schedulers import build_scheduler_unified
-# from taxml.cli.finetune import build_profile_paths
 from taxml.core.logging import setup_logging, attach_file_logger
-
-
-def set_all_seeds(seed: int = 42) -> None:
-    random.seed(seed)
-    os.environ["PYTHONHASHSEED"] = str(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
-
-def build_profile_paths(
-    experiments_root: str | Path,
-    experiment_name: str,
-    profile: str,  # "full" | "debug"
-) -> Dict[str, Path]:
-    exp_root = Path(experiments_root) / experiment_name
-    data_dir = exp_root / "data" / profile
-    logs_dir = exp_root / "logs"
-    return {
-        "exp_root": exp_root,
-        "data_dir": data_dir,
-        "prepared_csv": data_dir / "prepared.csv",
-        "label_space_json": data_dir / "label_space.json",  # not used here
-        "summary_json": data_dir / "summary.json",
-        "logs_dir": logs_dir,
-    }
-
-def build_pretrain_run_paths(
-    experiments_root: str | Path,
-    experiment_name: str,
-    arch_id: str,
-    profile: str,
-) -> Dict[str, Path]:
-    exp_root = Path(experiments_root) / experiment_name
-    arch_root = exp_root / arch_id / profile
-    run_dir  = arch_root / "pretrain"
-    return {
-        "arch_root": arch_root,
-        "run_dir": run_dir,
-        "checkpoints_dir": run_dir / "checkpoints",
-        "history_file": run_dir / "history.json",
-        "results_file": run_dir / "results.json",
-    }
+from taxml.core.randomness import set_all_seeds
 
 def clear_dir(p: Path) -> None:
     if p.exists():
         logger.warning("Clearing existing dir: %s", p)
         shutil.rmtree(p)
     p.mkdir(parents=True, exist_ok=True)
-
 
 # ---------- Main -------------------------------------------------------------
 
@@ -168,7 +90,7 @@ def main() -> None:
 
     
     # ---- Seeds & Device ----
-    set_all_seeds(42)
+    set_all_seeds(cfg["experiment"]["seed"])
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     try:
         logger.info("Versions: torch=%s | transformers=%s | cuda_available=%s",
@@ -373,7 +295,6 @@ def main() -> None:
     logger.info("=== Scheduler ===")
     steps_per_epoch = math.ceil(len(ds_train) / max(1, task["dataloader"]["batch_size"]))
     logger.info("steps_per_epoch=%d | scheduler.kind=%s", steps_per_epoch, cfg["pretrain"]["scheduler"]["kind"])
-    # logger.debug("Scheduler spec:\n%s", json.dumps(cfg["scheduler_catalog"][sched_kind], indent=2))
     sched_kind = task["scheduler"]["kind"]
     if sched_kind not in cfg["scheduler_catalog"]:
         raise KeyError(f"Unknown scheduler kind: {sched_kind!r}")
