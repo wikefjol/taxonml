@@ -57,7 +57,7 @@ def validate_datasets_and_log(
     train_dataset,
     val_dataset,
     levels: List[str],
-    class_sizes: Dict[str, int],
+    num_classes_by_rank: Dict[str, int],
     optimal_length: int,           # tokens without CLS/SEP
     logger,
     batch_probe_size: int = 8,
@@ -116,7 +116,7 @@ def validate_datasets_and_log(
             if not (torch.is_tensor(t) and t.dtype == torch.long and t.dim() == 0):
                 raise TypeError(f"{name}: {lvl} label must be scalar LongTensor; got {type(t)} shape={getattr(t, 'shape', None)}")
             ci = int(t.item())
-            C = class_sizes[lvl]
+            C = num_classes_by_rank[lvl]
             if not (0 <= ci < C):
                 raise ValueError(f"{name}: {lvl} label {ci} out of range [0,{C})")
 
@@ -284,7 +284,7 @@ def parse_levels(levels_arg: str) -> list[str]:
     return entries
 
 def _load_fold_masks(masks_path: str, fold_id: int, levels: list[str],
-                     class_sizes: dict[str, int], logger) -> tuple[dict, dict]:
+                     num_classes_by_rank: dict[str, int], logger) -> tuple[dict, dict]:
     with open(masks_path, "r") as f:
         payload = json.load(f)
 
@@ -303,8 +303,8 @@ def _load_fold_masks(masks_path: str, fold_id: int, levels: list[str],
         mt = entry_train["mask"]
         mv = entry_val["mask"]
 
-        # Sanity vs class_sizes
-        C = class_sizes[lvl]
+        # Sanity vs num_classes_by_rank
+        C = num_classes_by_rank[lvl]
         if len(mt) != C or len(mv) != C:
             raise ValueError(
                 f"Mask length mismatch for level '{lvl}': "
@@ -381,8 +381,8 @@ def main() -> None:
     ls = LabelSpace.from_json( paths["data"]["label_space_json"])
     ls.validate_levels(levels)
     
-    class_sizes = {lvl: ls.num_classes(lvl) for lvl in levels}
-    logger.info("Number of classes for active ranks: \n%s", json.dumps(class_sizes, indent=2, ensure_ascii=False))
+    num_classes_by_rank = {lvl: ls.num_classes(lvl) for lvl in levels}
+    logger.info("Number of classes for active ranks: \n%s", json.dumps(num_classes_by_rank, indent=2, ensure_ascii=False))
 
     # ===== Stage 3: preprocessing =====
     logger.info("=== Vocab ===")
@@ -439,7 +439,7 @@ def main() -> None:
     model = TaxonomyModel.for_classify(
         encoder=encoder,
         levels=levels,
-        class_sizes=class_sizes,
+        num_classes_by_rank=num_classes_by_rank,
         **head_cfg
     )
     logger.info(model)
@@ -474,7 +474,7 @@ def main() -> None:
         train_dataset=train_dataset,
         val_dataset=val_dataset,
         levels=levels,
-        class_sizes=class_sizes,
+        num_classes_by_rank=num_classes_by_rank,
         optimal_length=prep["optimal_length"],
         logger=logger,
         sample_size_for_stats=min(2048, len(train_dataset))
@@ -547,7 +547,7 @@ def main() -> None:
     logger.info("Optimizer schedule kind=%s", sched_kind)
     scheduler = build_scheduler_unified(optimizer, steps_per_epoch, schedule)
     
-    masks_train, masks_val = _load_fold_masks(paths["data"]["fold_masks"], fold, levels, class_sizes, logger)
+    masks_train, masks_val = _load_fold_masks(paths["data"]["fold_masks"], fold, levels, num_classes_by_rank, logger)
 
     # Run paths from config
     run = paths["finetune"]

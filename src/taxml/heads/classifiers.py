@@ -33,22 +33,22 @@ class HierarchicalHead(nn.Module):
         in_features: int,
         *,
         levels: List[str],
-        class_sizes: Dict[str, int],
+        num_classes_by_rank: Dict[str, int],
         bottleneck: int = 256,
         dropout: float = 0.3,
     ):
         super().__init__()
         self.levels: List[str] = LabelSpace.validate_levels(levels)
         self.in_features = in_features
-        self.class_sizes = {lvl: int(class_sizes[lvl]) for lvl in self.levels}
+        self.num_classes_by_rank = {lvl: int(num_classes_by_rank[lvl]) for lvl in self.levels}
 
         # Build a per-rank MLP head
         self._heads = nn.ModuleList()
         self._head_in_dims: List[int] = []   # for debugging/describe()
 
         for i, lvl in enumerate(self.levels):
-            out_c = self.class_sizes[lvl]
-            in_dim = in_features if i == 0 else (in_features + self.class_sizes[self.levels[i - 1]])
+            out_c = self.num_classes_by_rank[lvl]
+            in_dim = in_features if i == 0 else (in_features + self.num_classes_by_rank[self.levels[i - 1]])
             self._head_in_dims.append(in_dim)
 
             mlp = nn.Sequential(
@@ -61,7 +61,7 @@ class HierarchicalHead(nn.Module):
 
         logger.info(
             "HierarchicalHead built: " +
-            ", ".join(f"{lvl}[in={din}->out={self.class_sizes[lvl]}]" for lvl, din in zip(self.levels, self._head_in_dims))
+            ", ".join(f"{lvl}[in={din}->out={self.num_classes_by_rank[lvl]}]" for lvl, din in zip(self.levels, self._head_in_dims))
         )
 
     @property

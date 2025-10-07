@@ -31,7 +31,7 @@ class TaxonomyModel(nn.Module):
         mode: Literal["pretrain", "classify"],
         # classification config (mode="classify")
         levels: Optional[List[str]] = None,
-        class_sizes: Optional[Dict[str, int]] = None,
+        num_classes_by_rank: Optional[Dict[str, int]] = None,
         hierarchical_dropout: float = 0.3,
         bottleneck: int = 256,
         # pretraining config (mode="pretrain")
@@ -76,14 +76,14 @@ class TaxonomyModel(nn.Module):
                         logger.warning(f"Could not tie MLM weights: {e}")
 
         elif self._mode == "classify":
-            if not levels or not class_sizes:
-                raise ValueError("For mode='classify', both `levels` and `class_sizes` must be provided.")
+            if not levels or not num_classes_by_rank:
+                raise ValueError("For mode='classify', both `levels` and `num_classes_by_rank` must be provided.")
             self._levels = LabelSpace.validate_levels(levels)
-            self._class_sizes = dict(class_sizes)  # <-- keep for repr
+            self._num_classes_by_rank = dict(num_classes_by_rank)  # <-- keep for repr
             self.classifier = HierarchicalHead(
                 in_features=hidden_size,
                 levels=self._levels,
-                class_sizes=class_sizes,
+                num_classes_by_rank=num_classes_by_rank,
                 bottleneck=bottleneck,
                 dropout=hierarchical_dropout,
             )
@@ -173,7 +173,7 @@ class TaxonomyModel(nn.Module):
         else:
             # Hierarchical head details
             levels = getattr(self, "_levels", [])
-            class_sizes = getattr(self, "_class_sizes", {})
+            num_classes_by_rank = getattr(self, "_num_classes_by_rank", {})
             head_dims = getattr(self.classifier, "head_input_dims", [])
             bottleneck = getattr(self.classifier, "bottleneck", None)
             hdrop = getattr(self.classifier, "dropout_p", None) or getattr(self.classifier, "dropout", None)
@@ -181,7 +181,7 @@ class TaxonomyModel(nn.Module):
             head_lines = [
                 "type=HierarchicalHead",
                 f"levels={_fmt_list(levels)}",
-                "class_sizes=" + _fmt_dict_middle(class_sizes, max_items=6, tail_items=3),
+                "num_classes_by_rank=" + _fmt_dict_middle(num_classes_by_rank, max_items=6, tail_items=3),
                 f"bottleneck={bottleneck}, dropout={hdrop}",
                 f"head_input_dims={_fmt_list(head_dims)}",
             ]
@@ -227,7 +227,7 @@ class TaxonomyModel(nn.Module):
         *,
         encoder: nn.Module,
         levels: List[str],
-        class_sizes: Dict[str, int],
+        num_classes_by_rank: Dict[str, int],
         hierarchical_dropout: float = 0.3,
         bottleneck: int = 256,
     ) -> "TaxonomyModel":
@@ -235,7 +235,7 @@ class TaxonomyModel(nn.Module):
             encoder=encoder,
             mode="classify",
             levels=levels,
-            class_sizes=class_sizes,
+            num_classes_by_rank=num_classes_by_rank,
             hierarchical_dropout=hierarchical_dropout,
             bottleneck=bottleneck,
         )
