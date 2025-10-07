@@ -470,15 +470,15 @@ def main() -> None:
     val_dataset = ClassifyDataset(df_val, preproc_val, label_enc, levels)
     
     # #Out commented but valid:
-    validate_datasets_and_log(
-        train_dataset=train_dataset,
-        val_dataset=val_dataset,
-        levels=levels,
-        num_classes_by_rank=num_classes_by_rank,
-        optimal_length=prep["optimal_length"],
-        logger=logger,
-        sample_size_for_stats=min(2048, len(train_dataset))
-    )
+    # validate_datasets_and_log(
+    #     train_dataset=train_dataset,
+    #     val_dataset=val_dataset,
+    #     levels=levels,
+    #     num_classes_by_rank=num_classes_by_rank,
+    #     optimal_length=prep["optimal_length"],
+    #     logger=logger,
+    #     sample_size_for_stats=min(2048, len(train_dataset))
+    # )
 
     logger.info(f"Train set: {train_dataset.__repr__()}")
     logger.info(f"Val set: {val_dataset.__repr__()}")
@@ -548,6 +548,8 @@ def main() -> None:
     scheduler = build_scheduler_unified(optimizer, steps_per_epoch, schedule)
     
     masks_train, masks_val = _load_fold_masks(paths["data"]["fold_masks"], fold, levels, num_classes_by_rank, logger)
+    if hasattr(model.classifier, "set_prev_logit_gates"):
+        model.classifier.set_prev_logit_gates(masks_train)
 
     # Run paths from config
     run = paths["finetune"]
