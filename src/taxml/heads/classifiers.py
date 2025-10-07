@@ -36,11 +36,18 @@ class HierarchicalHead(nn.Module):
         num_classes_by_rank: Dict[str, int],
         bottleneck: int = 256,
         dropout: float = 0.3,
+        gate_prev_logits: bool = True,
+        stop_grad_prev_logits: bool = False
     ):
         super().__init__()
         self.levels: List[str] = LabelSpace.validate_levels(levels)
         self.in_features = in_features
         self.num_classes_by_rank = {lvl: int(num_classes_by_rank[lvl]) for lvl in self.levels}
+        
+        # Gating controls (feature path, not loss path)
+        self._gates: Dict[str, torch.Tensor] = {} # level -> 1xC_full float buffer
+        self.gate_prev_logits = bool(gate_prev_logits)
+        self.stop_grad_prev_logits = bool(stop_grad_prev_logits)
 
         # Build a per-rank MLP head
         self._heads = nn.ModuleList()
@@ -69,6 +76,33 @@ class HierarchicalHead(nn.Module):
         """Input dimensionality per head (for logging/debug)."""
         return list(self._head_in_dims)
 
+    def set_prev_logit_gates(self, masks_by_level: Dict[str, List[int]]) -> None:
+        """
+        Install per-level gates for the logits of level L (used as features for L+1).
+        Pass TRAIN masks (0/1, len==C_full(L)). Gates are stored as non-persistent buffers.
+        """
+        self._gates.clear()
+        # pick the module's current device (works whether called before or after .to(device))
+        try:
+            device = next(self.parameters()).device
+        except StopIteration:
+            device = torch.device("cpu")
+        for lvl in self.levels:
+            C = self.num_classes_by_rank[lvl]
+            arr = masks_by_level.get(lvl, None)
+            if arr is None:
+                g = torch.ones(1, C, dtype=torch.float32, device=device)
+            else:
+                if len(arr) != C:
+                    raise ValueError(f"Gate length for '{lvl}' must be {C}, got {len(arr)}")
+                g = torch.as_tensor(arr, dtype=torch.float32, device=device).view(1, C)
+            # non-persistent: not saved in state_dict; reapply per fold if needed
+            self.register_buffer(f"_gate_{lvl}", g, persistent=False)
+            self._gates[lvl] = getattr(self, f"_gate_{lvl}")
+
+    def clear_prev_logit_gates(self) -> None:
+        self._gates.clear()
+
     def forward(self, pooled: Tensor, *, return_inputs: bool = False) -> List[Tensor] | Tuple[List[Tensor], List[Tensor]]:
         """
         Args:
@@ -95,7 +129,23 @@ class HierarchicalHead(nn.Module):
         for i, head in enumerate(self._heads):
             if i > 0:
                 # concat pooled with previous logits
+                prev_level = self.levels[i - 1]
                 prev_logits = logits_list[-1]
+
+                # Gate (and optional stop-grad) the propagated logits
+                if self.gate_prev_logits and self._gates:
+                    gate = self._gates.get(prev_level, None)
+                    if gate is not None:
+                        if gate.shape[1] != prev_logits.shape[1]:
+                            raise ValueError(f"Gate size mismatch for level '{prev_level}': "
+                                             f"{gate.shape[1]} vs logits {prev_logits.shape[1]}")
+
+                        # ensure same device/dtype as logits (AMP-friendly)
+                        gate = gate.to(device=prev_logits.device, dtype=prev_logits.dtype, non_blocking=True)
+                        prev_logits = prev_logits * gate
+                        
+                if self.stop_grad_prev_logits:
+                    prev_logits = prev_logits.detach()
                 cur_in = torch.cat([pooled, prev_logits], dim=1)
             if return_inputs:
                 inputs_dbg.append(cur_in)
