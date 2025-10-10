@@ -144,6 +144,7 @@ def load_config(
         out["prep"] = {
             "uppercase_sequences": bool(_require(prep, "uppercase_sequences", "prep")),
             "min_species_resolution": int(_require(prep, "min_species_resolution", "prep")),
+            "min_sequences_per_species": int(_require(prep, "min_sequences_per_species", "prep")),
             "dedupe": {
                 "scope": str(_require(_require(prep, "dedupe", "prep"), "scope", "prep.dedupe")),
                 "keep_policy": str(_require(_require(prep, "dedupe", "prep"), "keep_policy", "prep.dedupe")),

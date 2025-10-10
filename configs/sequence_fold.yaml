@@ -50,6 +50,7 @@ scheduler_catalog:
 prep:
   uppercase_sequences: true
   min_species_resolution: 4
+  min_sequences_per_species: 4
   dedupe:
     scope: "within_species"
     keep_policy: "highest_resolution"
@@ -120,7 +121,7 @@ tasks:
     scheduler:
       kind: "tri"
     trainer:
-      max_epochs: 10
+      max_epochs: 2
       amp: true
       log_every: 200
 
@@ -136,10 +137,10 @@ debug_overrides:
   tasks:
     pretrain:
       dataloader: { batch_size: 16, num_workers: 0, pin_memory: true, drop_last_train: true, prefetch_factor: null }
-      trainer:   { max_epochs: 2, amp: false, log_every: 20, save_every_epochs: 1 }
+      trainer:   { max_epochs: 10, amp: false, log_every: 20, save_every_epochs: 1 }
     finetune:
       backbone:
         path: "/mimer/NOBACKUP/groups/snic2022-22-552/filbern/fungal_classification/pretrained_models/bert_h64_L2_H2_i256_P202/best_clean.pt"
         strict: true
       dataloader: { batch_size: 16, num_workers: 0, pin_memory: true, drop_last_train: true, prefetch_factor: null }
-      trainer:   { max_epochs: 2, amp: false, log_every: 5 }
+      trainer:   { max_epochs: 10, amp: false, log_every: 5 }

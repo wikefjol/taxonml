@@ -129,3 +129,4 @@ cython_debug/
 .spyproject
 .ropeproject
 /src/taxonml/
+message_friday_10.md

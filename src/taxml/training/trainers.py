@@ -306,7 +306,7 @@ class ClassificationTrainer:
 
         # --- fold-specific class masking ---
         # Converts 0/1 lists into (active_idx, remap) tensors for each level
-        self.mask_cache_train = self._build_mask_cache(masks_train)
+        self.mask_cache_train = self._build_mask_cache(masks_train) if masks_train else None
         self.mask_cache_val   = self._build_mask_cache(masks_val) if masks_val else None
 
         # --- checkpoint + logging ---

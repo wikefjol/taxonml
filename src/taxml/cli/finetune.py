@@ -32,7 +32,7 @@ from taxml.core.config import load_config
 from taxml.core.logging import setup_logging, attach_file_logger
 from taxml.core.randomness import set_all_seeds
 from taxml.data.datasets import ClassifyDataset
-from taxml.data.samplers import SpeciesBalancedSampler
+from taxml.data.samplers import SpeciesBalancedSampler, SpeciesPowerSampler
 from taxml.encoders.bert import load_pretrained_backbone
 from taxml.labels.encoder import LabelEncoder
 from taxml.labels.space import LabelSpace
@@ -337,6 +337,8 @@ def main() -> None:
     ap.add_argument("--fold", type=int, required=True, help="Fold index in [1..k]")
     ap.add_argument("--scheme", choices=["exp1","exp2"], default=None, help="Fold scheme (optional; defaults to exp1)")
     ap.add_argument("--debug", action="store_true", help="Apply debug_overrides")
+    ap.add_argument("--sampler_alpha", type=float, default=None,
+                    help="Exponent for 1/(class_size^alpha) train sampler; overrides YAML if set.")
     args = ap.parse_args()
     setup_logging(
         console_level=logging.INFO,
@@ -364,6 +366,8 @@ def main() -> None:
     arch_id  = cfg["arch"]["id"]
     profile = "debug" if cfg["runtime"]["debug"] else "full"
     
+    use_gate = True
+    print(f"use_gate = {use_gate}")
     logger.info("=== Runtime summary ===" )
     logger.info("experiment=%s | runtime=%s | profile=%s | arch_id=%s",
                 cfg["experiment"]["name"], cfg["runtime"], profile, arch_id)
@@ -491,8 +495,26 @@ def main() -> None:
     pin_memory   = dl["pin_memory"]
     drop_last_tr = dl["drop_last_train"]
     persistent_workers = (num_workers > 0)
-    train_sampler = SpeciesBalancedSampler.from_dataset(train_dataset)
     
+    alpha_cfg = dl.get("sampler_alpha", 1.0) #TODO: Implement alpha in cfg when found good value
+    alpha = args.sampler_alpha if args.sampler_alpha is not None else alpha_cfg
+    if alpha < 0:
+        raise ValueError(f"--sampler_alpha must be >= 0 (got {alpha})")
+    # train_sampler = SpeciesBalancedSampler.from_dataset(train_dataset)
+    
+    train_sampler = SpeciesPowerSampler.from_dataset(
+        train_dataset,
+        species_col="species",
+        alpha=alpha,
+        clip_max_ratio=dl.get("sampler_clip_max_ratio")  # optional
+    )
+
+    w = train_sampler.weights.double()
+    if not torch.isfinite(w).all():
+        raise ValueError("Sampler weights contain non-finite values.")
+    logger.info("Sampler weights (min/mean/max): %.4f / %.4f / %.4f",
+                w.min().item(), w.mean().item(), w.max().item())
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=batch_size,
@@ -548,7 +570,8 @@ def main() -> None:
     scheduler = build_scheduler_unified(optimizer, steps_per_epoch, schedule)
     
     masks_train, masks_val = _load_fold_masks(paths["data"]["fold_masks"], fold, levels, num_classes_by_rank, logger)
-    if hasattr(model.classifier, "set_prev_logit_gates"):
+
+    if hasattr(model.classifier, "set_prev_logit_gates") and use_gate:
         model.classifier.set_prev_logit_gates(masks_train)
 
     # Run paths from config
