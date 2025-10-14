@@ -42,6 +42,7 @@ from taxml.preprocessing.preprocessor import Preprocessor
 from taxml.preprocessing.vocab import Vocabulary, KmerVocabConstructor
 from taxml.training.schedulers import build_scheduler_unified
 from taxml.training.trainers import ClassificationTrainer
+from taxml.metrics.rank import register_accuracy_by_class_size_bins
 
 # Logging setup
 logger = logging.getLogger(__name__)
@@ -453,6 +454,7 @@ def main() -> None:
     # -------- Data split
     df = pd.read_csv(paths["data"]["prepared_csv"])
     
+
     fold_col = "fold_exp1" if task["fold_scheme"] == "exp1" else "fold_exp2"
     need_cols = {"sequence", fold_col, *levels}
     assert need_cols.issubset(df.columns), f"CSV must contain {need_cols}"
@@ -483,6 +485,26 @@ def main() -> None:
     #     logger=logger,
     #     sample_size_for_stats=min(2048, len(train_dataset))
     # )
+
+    # -- Species counts for binned metrics
+    sp_counts = df["species"].value_counts()
+    sp_to_idx = {lab: label_enc.encode("species", str(lab)) for lab in sp_counts.index}
+    C_sp = ls.num_classes("species")
+    species_counts_vec = torch.zeros(C_sp, dtype=torch.long)
+    for lab, cnt in sp_counts.items():
+        species_counts_vec[sp_to_idx[str(lab)]] = int(cnt)
+
+    species_size_bins = [(1,1),(2,2),(3,3),(4,4),(5,5),(6,10),(11,20),(21,50),(51,100),(101,1000),(1001,10**9)]
+    species_size_labels = ["1","2","3","4","5","6-10","11-20","21-50","51-100","101-1000",">1000"]
+    
+    size_metric_names = register_accuracy_by_class_size_bins(
+        prefix="acc_size",
+        class_sizes_global=species_counts_vec,
+        bins=species_size_bins,
+        labels=species_size_labels,
+    )
+    
+    # --
 
     logger.info(f"Train set: {train_dataset.__repr__()}")
     logger.info(f"Val set: {val_dataset.__repr__()}")
@@ -585,19 +607,27 @@ def main() -> None:
     CHECKPOINTS_DIR = Path(run["checkpoints_dir"])
     CHECKPOINTS_DIR.mkdir(parents=True, exist_ok=True)
     trainer = ClassificationTrainer(
-        model=model,
-        train_loader=train_loader,
-        val_loader=val_loader,
-        levels=levels,
-        masks_train=masks_train,
-        masks_val=masks_val,
-        optimizer=optimizer,
-        scheduler=scheduler,
-        amp = task["trainer"]["amp"],
-        log_every = task["trainer"]["log_every"],
-        checkpoints_dir=CHECKPOINTS_DIR,
-        select_best_by="species" if "species" in levels else levels[-1],
+        model           = model,
+        train_loader    = train_loader,
+        val_loader      = val_loader,
+        levels          = levels,
+
+        masks_train     = masks_train,
+        masks_val       = masks_val,
+
+        optimizer       = optimizer,
+        scheduler       = scheduler,
+        amp             = task["trainer"]["amp"],
+
+        log_every       = task["trainer"]["log_every"],
+        checkpoints_dir = CHECKPOINTS_DIR,
+        select_best_by  ="species" if "species" in levels else levels[-1],
+
+        rank_metrics=("accuracy", *size_metric_names),
     )
+
+    # Run training
+    logger.info("=== Training: Starting ===")
     summary = trainer.train(max_epochs=task["trainer"]["max_epochs"])
     logger.info("=== Training: done ===")
 

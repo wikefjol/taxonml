@@ -50,7 +50,7 @@ scheduler_catalog:
 prep:
   uppercase_sequences: true
   min_species_resolution: 4
-  min_sequences_per_species: 4
+  min_sequences_per_species: 3
   dedupe:
     scope: "within_species"
     keep_policy: "highest_resolution"
