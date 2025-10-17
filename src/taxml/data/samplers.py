@@ -41,7 +41,7 @@ class SpeciesPowerSampler(WeightedRandomSampler):
         species_col: str = "species",
         alpha: float = 1.0,
         eps: float = 0.0,
-        min_count: int = 1,
+        min_count: int = 0,# does this work?
         clip_max_ratio: float | None = None,  # e.g. 20.0 caps per-sample weight at 20× mean
         normalize: bool = True,
     ) -> "SpeciesPowerSampler":

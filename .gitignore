@@ -132,3 +132,4 @@ cython_debug/
 message_friday_10.md
 TODO_MONDAY_13th.txt
 finetune_model_debug.sh
+branch_diff.patch
