@@ -144,6 +144,7 @@ def load_config(
         out["prep"] = {
             "uppercase_sequences": bool(_require(prep, "uppercase_sequences", "prep")),
             "min_species_resolution": int(_require(prep, "min_species_resolution", "prep")),
+            "min_sequences_per_species": int(_require(prep, "min_sequences_per_species", "prep")),
             "dedupe": {
                 "scope": str(_require(_require(prep, "dedupe", "prep"), "scope", "prep.dedupe")),
                 "keep_policy": str(_require(_require(prep, "dedupe", "prep"), "keep_policy", "prep.dedupe")),
@@ -284,6 +285,10 @@ def load_config(
         tasks = _require(effective, "tasks", "root")
         ft_cfg = _require(tasks, "finetune", "tasks.finetune")
 
+        # Require sampler_alpha in dataloader
+        dl_cfg = _require(ft_cfg, "dataloader", "tasks.finetune")
+        _ = float(_require(dl_cfg, "sampler_alpha", "tasks.finetune.dataloader"))
+
         backbone = _require(ft_cfg, "backbone", "tasks.finetune")
         backbone_path = _as_path(_require(backbone, "path", "tasks.finetune.backbone"))
         if not backbone_path.exists():
@@ -317,7 +322,7 @@ def load_config(
                 "fold_index": int(fold_index),
                 "head": _require(ft_cfg, "head", "tasks.finetune"),
                 "backbone": {"path": backbone_path, "strict": bool(_require(backbone, "strict", "tasks.finetune.backbone"))},
-                "dataloader": _require(ft_cfg, "dataloader", "tasks.finetune"),
+                "dataloader": dl_cfg,
                 "optimizer": _require(ft_cfg, "optimizer", "tasks.finetune"),
                 "scheduler": _require(ft_cfg, "scheduler", "tasks.finetune"),
                 "trainer": _require(ft_cfg, "trainer", "tasks.finetune"),

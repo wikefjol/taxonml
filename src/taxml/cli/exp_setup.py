@@ -100,6 +100,41 @@ class NpEncoder(json.JSONEncoder):
         if isinstance(o, np.ndarray):
             return o.tolist()
         return super().default(o)
+    
+def _rank_count_table(df_before: pd.DataFrame, df_after: pd.DataFrame) -> str:
+    # Only include ranks present in the dataframe(s)
+    ranks_all = ["kingdom","phylum","class","order","family","genus","species"]
+    ranks = [r for r in ranks_all if r in df_before.columns and r in df_after.columns]
+
+    def counts(df: pd.DataFrame) -> Dict[str, int]:
+        d = {r: int(df[r].nunique()) for r in ranks}
+        d["rows"] = int(len(df))
+        return d
+
+    b = counts(df_before)
+    a = counts(df_after)
+    tbl = pd.DataFrame({"before": b, "after": a})
+    tbl["delta"] = tbl["after"] - tbl["before"]
+    # Order rows: high→low taxonomy, then rows last
+    idx = ranks + ["rows"]
+    tbl = tbl.loc[idx]
+    return "\n" + tbl.to_string()
+
+def filter_species_min_count(df: pd.DataFrame, n: int, species_col: str = "species") -> pd.DataFrame:
+    require_columns(df, [species_col], context="filter_species_min_count")
+    before_df = df
+    sp_counts = df[species_col].value_counts()
+    keep_sp = sp_counts[sp_counts >= n].index
+    out = df[df[species_col].isin(keep_sp)].copy()
+
+    dropped_sp = int((sp_counts < n).sum())
+    logger.info(
+        f"Filtered species with < {n} sequences "
+        f"(dropped {dropped_sp:,} species; rows {len(before_df):,}->{len(out):,})"
+    )
+    logger.info("Rank counts before/after (unique labels & rows):" + _rank_count_table(before_df, out))
+    return out
+
 
 def filter_by_resolution(df: pd.DataFrame, min_resolution: int) -> pd.DataFrame:
     before = len(df)
@@ -409,6 +444,7 @@ def main() -> None:
     args = parser.parse_args()
 
     cfg = load_config(mode = "prep", config_path = args.config,)
+    
     paths = cfg["paths"]  # alias for readability
 
     # attach file logger to the resolved prep log
@@ -452,6 +488,10 @@ def main() -> None:
         df = df,
         keep_policy=cfg["prep"]["dedupe"].get("keep_policy", "highest_resolution"),
         )
+
+    min_sp = cfg["prep"].get("min_sequences_per_species", 0)
+    if min_sp and min_sp > 0:
+        df = filter_species_min_count(df, n=min_sp)
     
     # === Prepare Debug Subset ===
     dbg = cfg["prep"]["debug_subset"]

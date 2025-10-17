@@ -306,7 +306,7 @@ class ClassificationTrainer:
 
         # --- fold-specific class masking ---
         # Converts 0/1 lists into (active_idx, remap) tensors for each level
-        self.mask_cache_train = self._build_mask_cache(masks_train)
+        self.mask_cache_train = self._build_mask_cache(masks_train) if masks_train else None
         self.mask_cache_val   = self._build_mask_cache(masks_val) if masks_val else None
 
         # --- checkpoint + logging ---
@@ -358,10 +358,10 @@ class ClassificationTrainer:
     def _plot_batch_overview(self) -> None:
         """
         Batch-level plots (train only):
-        • Global panel: total loss + learning rate
+        • Global: total loss + learning rate
         • Per-rank losses (log y)
         • Per-rank accuracy (0–1)
-        Produces batch_metrics_overview.png in checkpoint folder.
+        • NEW: Bin-accuracy lines (acc_size[...]) for a chosen level (prefers 'species')
         """
         if not self.batchlog_path or not os.path.exists(self.batchlog_path):
             return
@@ -374,7 +374,9 @@ class ClassificationTrainer:
         import matplotlib.pyplot as plt
         from matplotlib.ticker import FixedLocator, FixedFormatter
 
-        # --- load JSONL ---
+        BIN_PREFIX = "acc_size"  # change if you register with a different prefix
+
+        # --- load JSONL (train only) ---
         recs = []
         with open(self.batchlog_path, "r") as f:
             for line in f:
@@ -391,6 +393,7 @@ class ClassificationTrainer:
             return
 
         # --- flatten nested dicts safely ---
+
         # loss_by_level → loss_<lvl>
         if "loss_by_level" in df.columns:
             raw = [d for d in df["loss_by_level"].dropna().tolist() if isinstance(d, dict)]
@@ -400,14 +403,28 @@ class ClassificationTrainer:
                     lambda d: (d or {}).get(lvl) if isinstance(d, dict) else None
                 )
 
-        # metrics_by_level (e.g., accuracy) → acc_<lvl>
+        # metrics_by_level → (a) legacy acc_<lvl> and (b) generic <metric>_<lvl> columns
         if "metrics_by_level" in df.columns:
             raw = [d for d in df["metrics_by_level"].dropna().tolist() if isinstance(d, dict)]
-            acc_lvls = sorted({k for d in raw for k in d.keys() if isinstance(k, str)})
-            for lvl in acc_lvls:
+            lvls = sorted({k for d in raw for k in d.keys() if isinstance(k, str)})
+            metric_names = sorted({
+                mk for d in raw for md in d.values()
+                if isinstance(md, dict) for mk in md.keys() if isinstance(mk, str)
+            })
+
+            # legacy: acc_<lvl> for the existing "per-rank accuracy" panel
+            for lvl in lvls:
                 df[f"acc_{lvl}"] = df["metrics_by_level"].apply(
                     lambda d: (d or {}).get(lvl, {}).get("accuracy") if isinstance(d, dict) else None
                 )
+
+            # generic: create <metric>_<lvl> (e.g., accuracy_species, acc_size[1]_species, ...)
+            for lvl in lvls:
+                for m in metric_names:
+                    col = f"{m}_{lvl}"
+                    df[col] = df["metrics_by_level"].apply(
+                        lambda d, l=lvl, m_=m: (d or {}).get(l, {}).get(m_) if isinstance(d, dict) else None
+                    )
 
         # --- smooth numerics for readability ---
         df_s = df.sort_values("step").copy()
@@ -419,15 +436,29 @@ class ClassificationTrainer:
 
         # --- detect columns to plot ---
         loss_rank_cols = [c for c in df_s.columns if c.startswith("loss_") and c not in ("loss_by_level","loss_total")]
-        acc_rank_cols  = [c for c in df_s.columns if c.startswith("acc_")]
-        n_rows = 1 + (1 if loss_rank_cols else 0) + (1 if acc_rank_cols else 0)
+        acc_rank_cols = [f"acc_{lvl}" for lvl in self.levels if f"acc_{lvl}" in df_s.columns]
 
+        # NEW: bin-accuracy columns → pick a target level (prefer 'species' then select_best_by then any level)
+        bin_cols = []
+        target_lvl = None
+        if "metrics_by_level" in df.columns:
+            prefer = ["species", getattr(self, "select_best_by", None)] + list(self.levels)
+            prefer = [p for p in prefer if isinstance(p, str)]
+            for lvl in prefer:
+                cols = sorted([c for c in df_s.columns if c.startswith(BIN_PREFIX) and c.endswith(f"_{lvl}")])
+                if cols:
+                    target_lvl = lvl
+                    bin_cols = cols
+                    break
+
+        n_rows = 1 + (1 if loss_rank_cols else 0) + (1 if acc_rank_cols else 0) + (1 if bin_cols else 0)
         fig, axes = plt.subplots(n_rows, 1, figsize=(14, 3.0*n_rows), sharex=True)
         if n_rows == 1:
             axes = [axes]
 
         # --- panel 1: global (loss_total + lr) ---
-        ax = axes[0]
+        r = 0
+        ax = axes[r]; r += 1
         if "loss_total" in df_s:
             ax.plot(df_s["step"], df_s["loss_total"], label="total_loss")
             ax.set_ylabel("total loss")
@@ -443,7 +474,6 @@ class ClassificationTrainer:
             ax2.legend(loc="upper left")
 
         # --- panel 2: per-rank losses (log scale) ---
-        r = 1
         if loss_rank_cols:
             axl = axes[r]; r += 1
             for c in sorted(loss_rank_cols):
@@ -466,6 +496,20 @@ class ClassificationTrainer:
             if axa.get_legend_handles_labels()[1]:
                 axa.legend(ncol=max(1, len(acc_rank_cols)//6), fontsize=8)
 
+        # --- panel 4 (NEW): bin-accuracy lines for the chosen level ---
+        if bin_cols:
+            axb = axes[r]; r += 1
+            for c in bin_cols:
+                # e.g. "acc_size[6-10]_species" → legend "[6-10]"
+                bin_lab = c[len(BIN_PREFIX):].rsplit("_", 1)[0]  # keep the bracket for clarity
+                axb.plot(df_s["step"], df_s[c], label=bin_lab)
+            axb.set_ylabel(BIN_PREFIX); axb.set_ylim(0, 1)
+            axb.set_title(f"Bin accuracy (train) — level: {target_lvl}")
+            axb.grid(True, ls="--", lw=.5, alpha=.7)
+            if axb.get_legend_handles_labels()[1]:
+                # try to make wide legends fit
+                axb.legend(ncol=4 if len(bin_cols) > 8 else 2, fontsize=8)
+
         # --- x-axis: global steps, with epoch ticks ---
         if "epoch" in df_s.columns:
             starts = df_s.groupby("epoch")["step"].min().dropna().astype(float).sort_index()
@@ -475,8 +519,6 @@ class ClassificationTrainer:
                 for ax_ in axes:
                     ax_.xaxis.set_major_locator(FixedLocator(major_pos))
                     ax_.xaxis.set_major_formatter(FixedFormatter(major_lab))
-
-                # optional: faint epoch separators
                 for ax_ in axes:
                     for s in major_pos:
                         ax_.axvline(s, alpha=0.12, linewidth=1)
@@ -486,6 +528,7 @@ class ClassificationTrainer:
         out_png = os.path.join(self.ckpt, "batch_metrics_overview.png")
         fig.savefig(out_png, dpi=150)
         plt.close(fig)
+
 
     def _plot_epoch_overview(self) -> None:
         if not self.metrics_path or not os.path.exists(self.metrics_path):
@@ -966,6 +1009,7 @@ class ClassificationTrainer:
                 
                 with torch.no_grad(): # Metrics computation step: 
                     batch_acc_map: Dict[str, float] = {}  # for tqdm display
+                    last_res_by_level = {}
                     for lvl in self.levels:
 
                         res = compute_rank_metrics(
@@ -976,6 +1020,8 @@ class ClassificationTrainer:
                             ignore_index=IGNORE_INDEX,
                         )
                         
+                        last_res_by_level[lvl] = res
+
                         # aggregate epoch sums 
                         for name, nd in res.items(): 
                             #nd contains numerator and denominator for scalar metrics
@@ -1003,10 +1049,10 @@ class ClassificationTrainer:
                         metrics_by_level = {}
                         for lvl in self.levels:
                             metrics_by_level[lvl] = {}
-                            for name, nd in epoch_accums[lvl].items():
-                                # per-batch accuracy is available from batch_acc_map; extend similarly for other metrics if you compute them per batch
-                                if name == "accuracy" and lvl in batch_acc_map:
-                                    metrics_by_level[lvl][name] = batch_acc_map[lvl]
+                            for name, nd in last_res_by_level[lvl].items():
+                                d = nd["den"]
+                                if d > 0:
+                                    metrics_by_level[lvl][name] = nd["num"] / d
                         loss_by_level_scalar = {}
 
                         for lvl, t in forward_step.loss_by_level.items():
